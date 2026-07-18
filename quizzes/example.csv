@@ -1,0 +1,6 @@
+question,type,option1,option2,option3,option4,correct,timeLimitSec
+"What does CPU stand for?",,"Central Processing Unit","Computer Personal Unit","Core Power Unit","Central Peripheral Unit",1,20
+"Which is a valid IPv4 address?",,"256.1.1.1","192.168.0.1","10.0.0.999","hello.world",2,20
+"How many bits are in a byte?",,"4","8","16","32",2,15
+"Base of the hexadecimal system?",,"2","8","10","16",4,15
+"A byte can represent 256 distinct values.",boolean,,,,,true,15

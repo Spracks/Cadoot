@@ -1,0 +1,30 @@
+{
+  "name": "cadoot",
+  "version": "0.1.0",
+  "description": "A self-hosted, LAN-only Kahoot-style live quiz game for the classroom.",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace @cadoot/server run dev",
+    "dev:client": "npm --workspace @cadoot/client run dev",
+    "build": "npm --workspace @cadoot/client run build",
+    "start": "npm --workspace @cadoot/server run start",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "validate-quiz": "npm --workspace @cadoot/server run validate-quiz --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

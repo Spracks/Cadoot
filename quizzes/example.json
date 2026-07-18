@@ -1,0 +1,29 @@
+{
+  "title": "Networking Basics",
+  "questions": [
+    {
+      "text": "Which layer of the OSI model does a router primarily operate at?",
+      "options": ["Layer 2 (Data Link)", "Layer 3 (Network)", "Layer 4 (Transport)", "Layer 7 (Application)"],
+      "correctIndex": 1,
+      "timeLimitSec": 20
+    },
+    {
+      "text": "What does DNS translate?",
+      "options": ["MAC to IP", "Domain names to IP addresses", "IP to port", "Binary to hex"],
+      "correctIndex": 1,
+      "timeLimitSec": 20
+    },
+    {
+      "text": "Which protocol is connectionless?",
+      "options": ["TCP", "UDP"],
+      "correctIndex": 1,
+      "timeLimitSec": 15
+    },
+    {
+      "type": "boolean",
+      "text": "A subnet mask of /24 leaves 256 usable host addresses.",
+      "correct": false,
+      "timeLimitSec": 20
+    }
+  ]
+}
