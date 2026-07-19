@@ -7,7 +7,7 @@ import Leaderboard from '../components/Leaderboard';
 import SoundToggle from '../components/SoundToggle';
 import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
-import { avatarGlyph } from '../avatars';
+import AvatarBadge from '../components/AvatarBadge';
 import { playSound } from '../sound';
 
 export default function HostGame() {
@@ -77,7 +77,7 @@ function HostLobby() {
         </div>
         {joinUrl && (
           <div className="qr">
-            <QRCodeSVG value={joinUrl} size={168} />
+            <QRCodeSVG value={joinUrl} size={320} />
             <span className="qr-caption">Scan to join</span>
           </div>
         )}
@@ -103,9 +103,7 @@ function HostLobby() {
               className={`chip${p.connected ? '' : ' offline'}`}
               title={p.connected ? undefined : 'Disconnected — can rejoin'}
             >
-              <span className="chip-avatar" aria-hidden="true">
-                {avatarGlyph(p.avatar)}
-              </span>
+              <AvatarBadge id={p.avatar} className="chip-avatar" />
               {p.nickname}
             </li>
           ))}
@@ -218,9 +216,7 @@ function HostOver() {
             className={`podium-spot rank-${e.rank}`}
             style={{ animationDelay: `${i * 0.25}s` }}
           >
-            <div className="podium-avatar" aria-hidden="true">
-              {avatarGlyph(e.avatar)}
-            </div>
+            <AvatarBadge id={e.avatar} className="podium-avatar" />
             <div className="podium-name">{e.nickname}</div>
             <div className="podium-bar">
               <span>{e.rank}</span>

@@ -1,5 +1,5 @@
 import type { LeaderboardEntry } from '@cadoot/shared';
-import { avatarGlyph } from '../avatars';
+import AvatarBadge from './AvatarBadge';
 
 export default function Leaderboard({
   entries,
@@ -20,9 +20,7 @@ export default function Leaderboard({
           className={highlight && e.nickname === highlight ? 'me' : ''}
         >
           <span className="lb-rank">{e.rank}</span>
-          <span className="lb-avatar" aria-hidden="true">
-            {avatarGlyph(e.avatar)}
-          </span>
+          <AvatarBadge id={e.avatar} className="lb-avatar" />
           <span className="lb-name">{e.nickname}</span>
           <RankDelta delta={e.delta} />
           <span className="lb-score">{e.score}</span>

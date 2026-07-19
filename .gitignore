@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+# Avatar source art (large raster-in-SVG). The optimized PNGs the app uses are
+# committed under client/src/assets/avatars/ — regenerate with `npm run
+# build-avatars`. Keep a backup of this folder; use Git LFS if you want it versioned.
+/avatars/
+
 # Build output
 dist/
 *.tsbuildinfo

@@ -17,7 +17,8 @@
     "start": "npm --workspace @cadoot/server run start",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "validate-quiz": "npm --workspace @cadoot/server run validate-quiz --"
+    "validate-quiz": "npm --workspace @cadoot/server run validate-quiz --",
+    "build-avatars": "node scripts/build-avatars.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

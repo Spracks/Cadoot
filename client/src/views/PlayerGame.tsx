@@ -4,12 +4,8 @@ import AnswerTiles from '../components/AnswerTiles';
 import Leaderboard, { RankDelta } from '../components/Leaderboard';
 import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
-import {
-  AVATAR_CATEGORIES,
-  avatarsInCategory,
-  categoryOf,
-  avatarGlyph,
-} from '../avatars';
+import AvatarBadge from '../components/AvatarBadge';
+import { AVATARS } from '../avatars';
 
 export default function PlayerGame() {
   const pin = useStore((s) => s.pin);
@@ -30,7 +26,6 @@ function Join() {
   const [pin, setPin] = useState(initialPin ?? '');
   const [nickname, setNickname] = useState('');
   const [busy, setBusy] = useState(false);
-  const [avatarCat, setAvatarCat] = useState(() => categoryOf(myAvatar));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -77,35 +72,20 @@ function Join() {
         <fieldset className="avatar-picker">
           <legend>
             Pick your avatar{' '}
-            <span className="avatar-current" aria-hidden="true">
-              {avatarGlyph(myAvatar)}
-            </span>
+            <AvatarBadge id={myAvatar} className="avatar-current" />
           </legend>
-          <div className="avatar-tabs" role="tablist" aria-label="Avatar category">
-            {AVATAR_CATEGORIES.map((c) => (
-              <button
-                type="button"
-                key={c.id}
-                role="tab"
-                aria-selected={avatarCat === c.id}
-                className={`avatar-tab${avatarCat === c.id ? ' active' : ''}`}
-                onClick={() => setAvatarCat(c.id)}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
           <div className="avatar-grid" role="radiogroup" aria-label="Avatar">
-            {avatarsInCategory(avatarCat).map((a) => (
+            {AVATARS.map((a) => (
               <button
                 type="button"
                 key={a.id}
                 className={`avatar-choice${myAvatar === a.id ? ' selected' : ''}`}
                 aria-pressed={myAvatar === a.id}
+                aria-label={a.label}
                 title={a.label}
                 onClick={() => setMyAvatar(a.id)}
               >
-                <span aria-hidden="true">{a.glyph}</span>
+                <AvatarBadge id={a.id} />
               </button>
             ))}
           </div>
@@ -128,9 +108,7 @@ function PlayerLobby() {
   return (
     <div className="screen center">
       <h1 className="logo small">You’re in!</h1>
-      <div className="lobby-avatar" aria-hidden="true">
-        {avatarGlyph(avatar)}
-      </div>
+      <AvatarBadge id={avatar} className="lobby-avatar" />
       <p className="big-name">{nickname}</p>
       <p className="muted">Look at the shared screen. The game starts soon…</p>
     </div>
@@ -217,9 +195,7 @@ function PlayerOver() {
     <div className="screen center">
       {me && me.rank <= 3 && <Confetti />}
       <h1 className="logo small">Game over</h1>
-      <div className="lobby-avatar" aria-hidden="true">
-        {avatarGlyph(avatar)}
-      </div>
+      <AvatarBadge id={avatar} className="lobby-avatar" />
       {me && (
         <p className="big-name">
           #{me.rank} · {me.score} pts
