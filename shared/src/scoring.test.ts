@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { computeScore, DEFAULT_SCORE_CONFIG } from './scoring';
+import {
+  computeScore,
+  streakBonus,
+  DEFAULT_SCORE_CONFIG,
+  STREAK_STEP,
+  MAX_STREAK_LEVEL,
+} from './scoring';
 
 describe('computeScore', () => {
   it('awards nothing for a wrong answer', () => {
@@ -27,5 +33,23 @@ describe('computeScore', () => {
   it('ignores speed bonus when disabled', () => {
     const cfg = { ...DEFAULT_SCORE_CONFIG, speedBonus: false };
     expect(computeScore(true, 19000, 20000, cfg)).toBe(1000);
+  });
+});
+
+describe('streakBonus', () => {
+  it('awards nothing for the first correct answer (or none)', () => {
+    expect(streakBonus(0)).toBe(0);
+    expect(streakBonus(1)).toBe(0);
+  });
+
+  it('grows by one step per consecutive correct answer', () => {
+    expect(streakBonus(2)).toBe(STREAK_STEP);
+    expect(streakBonus(3)).toBe(STREAK_STEP * 2);
+  });
+
+  it('caps at MAX_STREAK_LEVEL', () => {
+    const cap = STREAK_STEP * MAX_STREAK_LEVEL;
+    expect(streakBonus(MAX_STREAK_LEVEL + 1)).toBe(cap);
+    expect(streakBonus(50)).toBe(cap);
   });
 });

@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type { Quiz } from '@cadoot/shared';
 
 export interface Player {
   id: string;
   nickname: string;
+  avatar: string;
   socketId: string;
   connected: boolean;
   score: number;
@@ -10,6 +12,14 @@ export interface Player {
   answerIndex: number | null;
   lastCorrect: boolean;
   lastPoints: number;
+  /** Running count of consecutive correct answers (0 after a wrong answer). */
+  streak: number;
+  /** Streak-bonus portion of the most recent question's points. */
+  lastStreakBonus: number;
+  /** Rank at the previous reveal (null before the first reveal). */
+  rank: number | null;
+  /** Rank change at the most recent reveal (positive = moved up). */
+  lastRankDelta: number | null;
 }
 
 export type GamePhase = 'lobby' | 'question' | 'reveal' | 'over';
@@ -17,6 +27,11 @@ export type GamePhase = 'lobby' | 'question' | 'reveal' | 'over';
 export interface Game {
   pin: string;
   hostSocketId: string;
+  /** Secret the host presents to reclaim the game after a page reload. */
+  hostToken: string;
+  hostConnected: boolean;
+  /** Ends the game if the host doesn't reconnect within the grace window. */
+  hostGraceTimer: ReturnType<typeof setTimeout> | null;
   quiz: Quiz;
   players: Map<string, Player>;
   phase: GamePhase;
@@ -37,6 +52,9 @@ export class GameManager {
     const game: Game = {
       pin: this.newPin(),
       hostSocketId,
+      hostToken: randomUUID(),
+      hostConnected: true,
+      hostGraceTimer: null,
       quiz,
       players: new Map(),
       phase: 'lobby',

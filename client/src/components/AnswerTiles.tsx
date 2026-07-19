@@ -1,4 +1,5 @@
 import { tileStyle } from '../theme';
+import RichText from './RichText';
 
 interface Props {
   options: string[];
@@ -54,7 +55,9 @@ export default function AnswerTiles({
             <span className="tile-shape" aria-hidden="true">
               {st.shape}
             </span>
-            <span className="tile-text">{opt}</span>
+            <span className="tile-text">
+              <RichText text={opt} inline />
+            </span>
             {distribution && (
               <span className="tile-count">{distribution[i] ?? 0}</span>
             )}

@@ -200,4 +200,94 @@ describe('game flow (end-to-end over sockets)', () => {
       teardown();
     }
   }, 15000);
+
+  it('survives a host reload and lets the host reclaim control', async () => {
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    const bob = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz: QUIZ });
+      const pin = created.pin as string;
+      const hostToken = created.hostToken as string;
+      expect(hostToken).toBeTruthy();
+
+      await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+      await bob.emitWithAck('player:join', { pin, nickname: 'Bob' });
+
+      const shown = once(alice, 'question:show');
+      host.emit('host:startGame');
+      await shown;
+      const revealP = once<any>(host, 'question:results');
+      alice.emit('player:answer', { optionIndex: 0 }); // correct
+      bob.emit('player:answer', { optionIndex: 1 }); // wrong
+      await revealP;
+
+      // The host's laptop "reloads": the socket drops. The game must NOT end.
+      host.close();
+
+      // A fresh host socket reclaims the game with the stored token.
+      const host2 = connect(url);
+      const syncP = once<any>(host2, 'host:sync');
+      const rejoin = await host2.emitWithAck('host:rejoin', { pin, hostToken });
+      expect(rejoin.ok).toBe(true);
+      const sync = await syncP;
+      expect(sync.phase).toBe('reveal');
+      expect(sync.reveal.leaderboard[0].nickname).toBe('Alice');
+
+      // Control is restored: the reclaimed host can advance the game.
+      const shown2 = once(bob, 'question:show');
+      host2.emit('host:nextQuestion');
+      await shown2;
+      host2.close();
+    } finally {
+      host.close();
+      alice.close();
+      bob.close();
+      teardown();
+    }
+  }, 15000);
+
+  it('tracks answer streaks and reports rank movement', async () => {
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    const bob = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz: QUIZ });
+      const pin = created.pin as string;
+      await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+      await bob.emitWithAck('player:join', { pin, nickname: 'Bob' });
+
+      // Q1: Alice correct -> streak 1, no bonus yet, no prior rank (delta null).
+      const shown1 = once(alice, 'question:show');
+      host.emit('host:startGame');
+      await shown1;
+      const a1P = once<any>(alice, 'answer:result');
+      alice.emit('player:answer', { optionIndex: 0 }); // correct
+      bob.emit('player:answer', { optionIndex: 1 }); // wrong
+      const a1 = await a1P;
+      expect(a1.streak).toBe(1);
+      expect(a1.streakBonus).toBe(0);
+      expect(a1.rankDelta).toBeNull();
+
+      // Q2: Alice correct again -> streak 2 earns a bonus.
+      const shown2 = once(alice, 'question:show');
+      host.emit('host:nextQuestion');
+      await shown2;
+      const a2P = once<any>(alice, 'answer:result');
+      alice.emit('player:answer', { optionIndex: 1 }); // Q2 correct index is 1
+      bob.emit('player:answer', { optionIndex: 0 }); // wrong
+      const a2 = await a2P;
+      expect(a2.streak).toBe(2);
+      expect(a2.streakBonus).toBeGreaterThan(0);
+      // Rank delta is present (a number) now that there is a prior standing.
+      expect(typeof a2.rankDelta).toBe('number');
+    } finally {
+      host.close();
+      alice.close();
+      bob.close();
+      teardown();
+    }
+  }, 15000);
 });

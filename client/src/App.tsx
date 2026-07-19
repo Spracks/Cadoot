@@ -10,6 +10,7 @@ export default function App() {
   const role = useStore((s) => s.role);
   const pin = useStore((s) => s.pin);
   const setRole = useStore((s) => s.setRole);
+  const notice = useStore((s) => s.notice);
 
   // Arriving via a scanned QR link (?pin=...) drops the student on Join.
   useEffect(() => {
@@ -24,6 +25,11 @@ export default function App() {
   return (
     <div className="app">
       <ErrorBanner />
+      {notice && (
+        <div className="notice-toast" role="status">
+          {notice}
+        </div>
+      )}
       {screen}
     </div>
   );

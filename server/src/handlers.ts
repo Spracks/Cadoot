@@ -3,6 +3,7 @@ import type { Server, Socket } from 'socket.io';
 import {
   QuizSchema,
   computeScore,
+  streakBonus,
   DEFAULT_SCORE_CONFIG,
   type ClientToServerEvents,
   type ServerToClientEvents,
@@ -10,10 +11,13 @@ import {
   type LeaderboardEntry,
   type PublicQuestion,
   type StateSync,
+  type HostStateSync,
 } from '@cadoot/shared';
 import { GameManager, type Game, type Player } from './game';
 
 const TICK_MS = 250;
+/** How long a game survives a host disconnect before it's ended, in ms. */
+const HOST_GRACE_MS = 120_000;
 
 type IoServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IoSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -26,7 +30,17 @@ export function registerHandlers(io: IoServer): GameManager {
       id: p.id,
       nickname: p.nickname,
       connected: p.connected,
+      avatar: p.avatar || undefined,
     }));
+  }
+
+  /** How many connected players have locked in an answer this question. */
+  function answerProgress(game: Game): { answered: number; total: number } {
+    const connected = [...game.players.values()].filter((p) => p.connected);
+    return {
+      answered: connected.filter((p) => p.answered).length,
+      total: connected.length,
+    };
   }
 
   function publicQuestion(game: Game, index: number): PublicQuestion {
@@ -73,7 +87,6 @@ export function registerHandlers(io: IoServer): GameManager {
     }
     if (game.phase === 'reveal' && q) {
       const ranked = sortedPlayers(game);
-      const lb = ranked.map((p, i) => ({ nickname: p.nickname, score: p.score, rank: i + 1 }));
       const rank = ranked.findIndex((p) => p.id === player.id) + 1;
       return {
         phase: 'reveal',
@@ -83,13 +96,16 @@ export function registerHandlers(io: IoServer): GameManager {
         reveal: {
           correctIndex: q.correctIndex,
           distribution: distributionFor(game, q.options.length),
-          leaderboard: lb,
+          leaderboard: leaderboard(game),
         },
         myResult: {
           correct: player.lastCorrect,
           pointsEarned: player.lastPoints,
           totalScore: player.score,
           rank,
+          rankDelta: player.lastRankDelta,
+          streak: player.streak,
+          streakBonus: player.lastStreakBonus,
         },
         finalLeaderboard: null,
       };
@@ -125,7 +141,61 @@ export function registerHandlers(io: IoServer): GameManager {
       nickname: p.nickname,
       score: p.score,
       rank: i + 1,
+      avatar: p.avatar || undefined,
+      delta: p.lastRankDelta,
     }));
+  }
+
+  /** Full snapshot for a reconnecting host, mirroring the live game state. */
+  function buildHostSync(game: Game): HostStateSync {
+    const q = game.quiz.questions[game.currentIndex];
+    const base = {
+      pin: game.pin,
+      players: lobbyPlayers(game),
+      answeredCount: answerProgress(game).answered,
+    };
+    if (game.phase === 'question' && q) {
+      return {
+        ...base,
+        phase: 'question',
+        question: publicQuestion(game, game.currentIndex),
+        remainingMs: remainingMs(game),
+        reveal: null,
+        finalLeaderboard: null,
+      };
+    }
+    if (game.phase === 'reveal' && q) {
+      return {
+        ...base,
+        phase: 'reveal',
+        question: publicQuestion(game, game.currentIndex),
+        remainingMs: 0,
+        reveal: {
+          correctIndex: q.correctIndex,
+          distribution: distributionFor(game, q.options.length),
+          leaderboard: leaderboard(game),
+        },
+        finalLeaderboard: null,
+      };
+    }
+    if (game.phase === 'over') {
+      return {
+        ...base,
+        phase: 'over',
+        question: null,
+        remainingMs: 0,
+        reveal: null,
+        finalLeaderboard: leaderboard(game),
+      };
+    }
+    return {
+      ...base,
+      phase: 'lobby',
+      question: null,
+      remainingMs: 0,
+      reveal: null,
+      finalLeaderboard: null,
+    };
   }
 
   function clearTimers(game: Game): void {
@@ -155,6 +225,7 @@ export function registerHandlers(io: IoServer): GameManager {
     }
 
     io.to(game.pin).emit('question:show', publicQuestion(game, index));
+    io.to(game.pin).emit('question:answered', answerProgress(game));
 
     const durationMs = question.timeLimitSec * 1000;
     game.questionTimer = setTimeout(() => endQuestion(game), durationMs);
@@ -180,13 +251,15 @@ export function registerHandlers(io: IoServer): GameManager {
     for (const p of game.players.values()) p.score += p.lastPoints;
     const distribution = distributionFor(game, question.options.length);
 
+    // Recompute standings, then record each player's rank movement vs the
+    // previous reveal before overwriting their stored rank.
     const ranked = sortedPlayers(game);
-    const lb: LeaderboardEntry[] = ranked.map((p, i) => ({
-      nickname: p.nickname,
-      score: p.score,
-      rank: i + 1,
-    }));
-    const rankById = new Map(ranked.map((p, i) => [p.id, i + 1]));
+    ranked.forEach((p, i) => {
+      const newRank = i + 1;
+      p.lastRankDelta = p.rank == null ? null : p.rank - newRank;
+      p.rank = newRank;
+    });
+    const lb = leaderboard(game);
 
     io.to(game.pin).emit('question:results', {
       correctIndex: question.correctIndex,
@@ -199,7 +272,10 @@ export function registerHandlers(io: IoServer): GameManager {
         correct: p.lastCorrect,
         pointsEarned: p.lastPoints,
         totalScore: p.score,
-        rank: rankById.get(p.id) ?? 0,
+        rank: p.rank ?? 0,
+        rankDelta: p.lastRankDelta,
+        streak: p.streak,
+        streakBonus: p.lastStreakBonus,
       });
     }
   }
@@ -219,7 +295,29 @@ export function registerHandlers(io: IoServer): GameManager {
       }
       const game = manager.createGame(socket.id, parsed.data);
       socket.join(game.pin);
-      ack({ pin: game.pin });
+      ack({ pin: game.pin, hostToken: game.hostToken });
+    });
+
+    socket.on('host:rejoin', ({ pin, hostToken }, ack) => {
+      const game = manager.get(pin);
+      if (!game) {
+        ack({ ok: false, error: 'That game is no longer running.' });
+        return;
+      }
+      if (game.hostToken !== hostToken) {
+        ack({ ok: false, error: 'Host session did not match this game.' });
+        return;
+      }
+      game.hostSocketId = socket.id;
+      game.hostConnected = true;
+      if (game.hostGraceTimer) {
+        clearTimeout(game.hostGraceTimer);
+        game.hostGraceTimer = null;
+      }
+      socket.join(pin);
+      ack({ ok: true });
+      socket.emit('host:sync', buildHostSync(game));
+      io.to(pin).emit('game:notice', { message: 'Host reconnected.' });
     });
 
     socket.on('host:startGame', () => {
@@ -248,7 +346,7 @@ export function registerHandlers(io: IoServer): GameManager {
       gameOver(game);
     });
 
-    socket.on('player:join', ({ pin, nickname }, ack) => {
+    socket.on('player:join', ({ pin, nickname, avatar }, ack) => {
       const game = manager.get(pin);
       if (!game) {
         ack({ ok: false, error: 'Game not found. Check the PIN.' });
@@ -279,6 +377,8 @@ export function registerHandlers(io: IoServer): GameManager {
       game.players.set(id, {
         id,
         nickname: name,
+        // Keep the avatar id short and safe; the client resolves it to a glyph.
+        avatar: typeof avatar === 'string' ? avatar.slice(0, 32) : '',
         socketId: socket.id,
         connected: true,
         score: 0,
@@ -286,6 +386,10 @@ export function registerHandlers(io: IoServer): GameManager {
         answerIndex: null,
         lastCorrect: false,
         lastPoints: 0,
+        streak: 0,
+        lastStreakBonus: 0,
+        rank: null,
+        lastRankDelta: null,
       });
       socket.join(pin);
       ack({ ok: true, playerId: id });
@@ -306,7 +410,7 @@ export function registerHandlers(io: IoServer): GameManager {
       player.socketId = socket.id;
       player.connected = true;
       socket.join(pin);
-      ack({ ok: true, nickname: player.nickname });
+      ack({ ok: true, nickname: player.nickname, avatar: player.avatar || undefined });
       io.to(pin).emit('lobby:update', { players: lobbyPlayers(game) });
       // Bring this player's screen back to the current point in the game.
       socket.emit('state:sync', buildSync(game, player));
@@ -327,12 +431,19 @@ export function registerHandlers(io: IoServer): GameManager {
       player.answerIndex = optionIndex;
       const timeUsed = Date.now() - (game.questionStartedAt ?? Date.now());
       player.lastCorrect = optionIndex === question.correctIndex;
-      player.lastPoints = computeScore(
+      const base = computeScore(
         player.lastCorrect,
         timeUsed,
         question.timeLimitSec * 1000,
         DEFAULT_SCORE_CONFIG,
       );
+      // A correct answer extends the streak (and earns its bonus); a wrong one
+      // breaks it. The streak carries across questions until broken.
+      player.streak = player.lastCorrect ? player.streak + 1 : 0;
+      player.lastStreakBonus = player.lastCorrect ? streakBonus(player.streak) : 0;
+      player.lastPoints = base + player.lastStreakBonus;
+
+      io.to(game.pin).emit('question:answered', answerProgress(game));
 
       // Only wait on players who are actually still connected, so a student who
       // dropped off doesn't hold up the reveal for everyone else.
@@ -345,11 +456,24 @@ export function registerHandlers(io: IoServer): GameManager {
     socket.on('disconnect', () => {
       const hostGame = manager.getByHost(socket.id);
       if (hostGame) {
-        clearTimers(hostGame);
-        io.to(hostGame.pin).emit('game:error', {
-          message: 'The host disconnected. This game has ended.',
+        // Don't kill the game immediately — a host page reload should be able to
+        // reclaim it. The question clock keeps running (the server is the source
+        // of truth); we just start a grace timer that ends the game if the host
+        // never comes back. `.unref()` so a pending timer can't keep the process
+        // alive on its own.
+        hostGame.hostConnected = false;
+        io.to(hostGame.pin).emit('game:notice', {
+          message: 'Host connection lost — trying to reconnect…',
+          kind: 'warn',
         });
-        manager.remove(hostGame.pin);
+        hostGame.hostGraceTimer = setTimeout(() => {
+          clearTimers(hostGame);
+          io.to(hostGame.pin).emit('game:error', {
+            message: 'The host disconnected. This game has ended.',
+          });
+          manager.remove(hostGame.pin);
+        }, HOST_GRACE_MS);
+        hostGame.hostGraceTimer.unref?.();
         return;
       }
       const found = manager.findPlayerBySocket(socket.id);

@@ -1,7 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { useStore, getInitialPin } from '../store';
 import AnswerTiles from '../components/AnswerTiles';
-import Leaderboard from '../components/Leaderboard';
+import Leaderboard, { RankDelta } from '../components/Leaderboard';
+import RichText from '../components/RichText';
+import Confetti from '../components/Confetti';
+import {
+  AVATAR_CATEGORIES,
+  avatarsInCategory,
+  categoryOf,
+  avatarGlyph,
+} from '../avatars';
 
 export default function PlayerGame() {
   const pin = useStore((s) => s.pin);
@@ -16,16 +24,19 @@ export default function PlayerGame() {
 function Join() {
   const join = useStore((s) => s.join);
   const setRole = useStore((s) => s.setRole);
+  const myAvatar = useStore((s) => s.myAvatar);
+  const setMyAvatar = useStore((s) => s.setMyAvatar);
   const initialPin = getInitialPin();
   const [pin, setPin] = useState(initialPin ?? '');
   const [nickname, setNickname] = useState('');
   const [busy, setBusy] = useState(false);
+  const [avatarCat, setAvatarCat] = useState(() => categoryOf(myAvatar));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      await join(pin.trim(), nickname.trim());
+      await join(pin.trim(), nickname.trim(), myAvatar);
     } catch {
       /* surfaced via the error banner */
     } finally {
@@ -63,6 +74,42 @@ function Join() {
             required
           />
         </label>
+        <fieldset className="avatar-picker">
+          <legend>
+            Pick your avatar{' '}
+            <span className="avatar-current" aria-hidden="true">
+              {avatarGlyph(myAvatar)}
+            </span>
+          </legend>
+          <div className="avatar-tabs" role="tablist" aria-label="Avatar category">
+            {AVATAR_CATEGORIES.map((c) => (
+              <button
+                type="button"
+                key={c.id}
+                role="tab"
+                aria-selected={avatarCat === c.id}
+                className={`avatar-tab${avatarCat === c.id ? ' active' : ''}`}
+                onClick={() => setAvatarCat(c.id)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <div className="avatar-grid" role="radiogroup" aria-label="Avatar">
+            {avatarsInCategory(avatarCat).map((a) => (
+              <button
+                type="button"
+                key={a.id}
+                className={`avatar-choice${myAvatar === a.id ? ' selected' : ''}`}
+                aria-pressed={myAvatar === a.id}
+                title={a.label}
+                onClick={() => setMyAvatar(a.id)}
+              >
+                <span aria-hidden="true">{a.glyph}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <button
           className="btn primary"
           type="submit"
@@ -77,9 +124,13 @@ function Join() {
 
 function PlayerLobby() {
   const nickname = useStore((s) => s.myNickname);
+  const avatar = useStore((s) => s.myAvatar);
   return (
     <div className="screen center">
       <h1 className="logo small">You’re in!</h1>
+      <div className="lobby-avatar" aria-hidden="true">
+        {avatarGlyph(avatar)}
+      </div>
       <p className="big-name">{nickname}</p>
       <p className="muted">Look at the shared screen. The game starts soon…</p>
     </div>
@@ -108,7 +159,9 @@ function PlayerQuestion() {
         </span>
         <span className="pq-time">{Math.ceil(remainingMs / 1000)}s</span>
       </div>
-      <h2 className="q-text small q-enter">{q.text}</h2>
+      <div className="q-text small q-enter">
+        <RichText text={q.text} />
+      </div>
       <AnswerTiles
         options={q.options}
         onPick={answer}
@@ -138,8 +191,17 @@ function PlayerReveal() {
             : "Time's up"}
       </h1>
       <p className="points">+{result.pointsEarned}</p>
-      <p className="muted">
-        Score {result.totalScore} · Rank #{result.rank}
+      {result.streak >= 2 && (
+        <p className="streak" aria-label={`${result.streak} in a row`}>
+          🔥 {result.streak} in a row
+          {result.streakBonus > 0 && (
+            <span className="streak-bonus"> +{result.streakBonus}</span>
+          )}
+        </p>
+      )}
+      <p className="muted rank-line">
+        Score {result.totalScore} · Rank #{result.rank}{' '}
+        <RankDelta delta={result.rankDelta} />
       </p>
     </div>
   );
@@ -148,11 +210,16 @@ function PlayerReveal() {
 function PlayerOver() {
   const lb = useStore((s) => s.finalLeaderboard) ?? [];
   const nickname = useStore((s) => s.myNickname);
+  const avatar = useStore((s) => s.myAvatar);
   const reset = useStore((s) => s.reset);
   const me = lb.find((e) => e.nickname === nickname);
   return (
     <div className="screen center">
+      {me && me.rank <= 3 && <Confetti />}
       <h1 className="logo small">Game over</h1>
+      <div className="lobby-avatar" aria-hidden="true">
+        {avatarGlyph(avatar)}
+      </div>
       {me && (
         <p className="big-name">
           #{me.rank} · {me.score} pts

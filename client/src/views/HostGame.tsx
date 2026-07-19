@@ -5,6 +5,9 @@ import AnswerTiles from '../components/AnswerTiles';
 import Countdown from '../components/Countdown';
 import Leaderboard from '../components/Leaderboard';
 import SoundToggle from '../components/SoundToggle';
+import RichText from '../components/RichText';
+import Confetti from '../components/Confetti';
+import { avatarGlyph } from '../avatars';
 import { playSound } from '../sound';
 
 export default function HostGame() {
@@ -100,6 +103,9 @@ function HostLobby() {
               className={`chip${p.connected ? '' : ' offline'}`}
               title={p.connected ? undefined : 'Disconnected — can rejoin'}
             >
+              <span className="chip-avatar" aria-hidden="true">
+                {avatarGlyph(p.avatar)}
+              </span>
               {p.nickname}
             </li>
           ))}
@@ -115,6 +121,7 @@ function HostLobby() {
 function HostQuestion() {
   const q = useStore((s) => s.question);
   const remainingMs = useStore((s) => s.remainingMs);
+  const progress = useStore((s) => s.answeredProgress);
   const skip = useStore((s) => s.skipQuestion);
   useEffect(() => {
     playSound('questionStart');
@@ -129,7 +136,9 @@ function HostQuestion() {
         <Countdown remainingMs={remainingMs} totalMs={q.timeLimitSec * 1000} />
       </div>
       <div className="q-stage" key={q.index}>
-        <h1 className="q-text q-enter">{q.text}</h1>
+        <div className="q-text q-enter">
+          <RichText text={q.text} />
+        </div>
         <AnswerTiles
           options={q.options}
           big
@@ -137,6 +146,11 @@ function HostQuestion() {
         />
       </div>
       <div className="host-controls">
+        {progress && (
+          <span className="answered-pill" aria-live="polite">
+            <strong>{progress.answered}</strong> / {progress.total} answered
+          </span>
+        )}
         <button className="btn ghost" onClick={skip}>
           Skip / reveal now
         </button>
@@ -157,7 +171,9 @@ function HostReveal() {
   const isLast = q.index + 1 >= q.total;
   return (
     <div className="screen host-reveal">
-      <h1 className="q-text">{q.text}</h1>
+      <div className="q-text">
+        <RichText text={q.text} />
+      </div>
       <AnswerTiles
         options={q.options}
         correctIndex={reveal.correctIndex}
@@ -193,6 +209,7 @@ function HostOver() {
   }, []);
   return (
     <div className="screen host-over">
+      <Confetti />
       <h1 className="logo">Final results</h1>
       <div className="podium">
         {top.map((e, i) => (
@@ -201,6 +218,9 @@ function HostOver() {
             className={`podium-spot rank-${e.rank}`}
             style={{ animationDelay: `${i * 0.25}s` }}
           >
+            <div className="podium-avatar" aria-hidden="true">
+              {avatarGlyph(e.avatar)}
+            </div>
             <div className="podium-name">{e.nickname}</div>
             <div className="podium-bar">
               <span>{e.rank}</span>
