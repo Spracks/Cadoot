@@ -143,6 +143,9 @@ export function registerHandlers(io: IoServer): GameManager {
       rank: i + 1,
       avatar: p.avatar || undefined,
       delta: p.lastRankDelta,
+      // Scores are committed in reveal() before this runs, so `score` is the
+      // new total and `lastPoints` is what the question just added.
+      gained: p.lastPoints,
     }));
   }
 

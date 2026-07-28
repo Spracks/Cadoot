@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import AnswerTiles from '../components/AnswerTiles';
 import Countdown from '../components/Countdown';
 import Leaderboard from '../components/Leaderboard';
+import AnimatedLeaderboard from '../components/AnimatedLeaderboard';
 import SoundToggle from '../components/SoundToggle';
 import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
@@ -50,6 +51,7 @@ function HostLobby() {
 
   return (
     <div className="screen host-lobby">
+      <h1 className="logo small">Cadoot</h1>
       <div className="lobby-head">
         <div className="pin-block">
           <span className="pin-label">Game PIN</span>
@@ -181,7 +183,7 @@ function HostReveal() {
       />
       <div className="reveal-lb">
         <h2>Leaderboard</h2>
-        <Leaderboard entries={reveal.leaderboard} limit={5} />
+        <AnimatedLeaderboard entries={reveal.leaderboard} limit={10} />
       </div>
       <div className="host-controls">
         {isLast ? (

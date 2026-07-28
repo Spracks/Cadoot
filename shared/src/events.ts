@@ -32,6 +32,12 @@ export interface LeaderboardEntry {
    * moved down, 0 = unchanged, null = no previous standing (first reveal).
    */
   delta?: number | null;
+  /**
+   * Points earned on the question just revealed. Lets the host animate each
+   * score up from `score - gained` (where the player stood going into the
+   * question) to `score`. 0 when no question has been scored yet.
+   */
+  gained?: number;
 }
 
 /** A player's personal result for one question, shown on their own device. */
