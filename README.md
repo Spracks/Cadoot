@@ -15,9 +15,14 @@ Requires **Node.js 20+**.
 git clone <this-repo>
 cd cadoot
 npm install
-npm run build      # builds the web client
-npm start          # starts the server on port 3000
+npm run build          # builds the web client
+npm run setup:firewall # Windows only, once per machine — see note below
+npm start              # starts the server on port 3000
 ```
+
+`setup:firewall` is what lets **other devices** reach you. Skip it and the host
+screen still works perfectly on `localhost`, but student phones cannot connect —
+see [Networking](#-networking-read-this-before-class).
 
 Then, on the **host** machine (the one plugged into the projector), open:
 
@@ -83,8 +88,37 @@ The app is easy; getting students *connected* is the part that varies by network
      specific host.
   3. **Retrofit to a shared machine.** Run Cadoot on a wired machine everyone can
      reach and pin its address with `PUBLIC_URL` (see below). Same app, no code changes.
-- **Firewall.** On first run, allow Node.js through the laptop's firewall (Windows
-  prompts — choose the network type matching the classroom, usually "Private").
+- **Firewall (Windows) — run this once per machine.**
+
+  ```bash
+  npm run setup:firewall
+  ```
+
+  Windows blocks inbound connections to Node by default. The prompt you get on
+  first run only covers **Private** networks, so as soon as Windows classifies a
+  network as **Public** — which it does for most new networks, and for many
+  managed laptops after a policy refresh — students stop being able to connect.
+  The failure is silent and misleading: `http://localhost:3000` keeps working,
+  because loopback traffic never touches the firewall.
+
+  The script adds one inbound rule, scoped to Node and to Cadoot's port, that
+  applies on **every** network profile, so it survives re-classification and you
+  don't have to redo it per network. It needs administrator rights and will ask
+  for them once (UAC). It prints the exact rule first, is safe to re-run, and
+  takes `-DryRun` to preview, `-Port <n>` to match a custom `PORT`, and
+  `-Remove` to undo:
+
+  ```bash
+  npm run setup:firewall -- -DryRun
+  npm run setup:firewall -- -Port 8080
+  npm run setup:firewall -- -Remove
+  ```
+
+  It is deliberately *not* wired into `npm install`: installs run unelevated, and
+  a dependency install should never silently change your firewall.
+
+  > If you upgrade Node to a different install path (e.g. via nvm), re-run the
+  > script — the rule is scoped to a specific `node.exe`.
 
 > **Do a 2-minute dry run from your own phone on the actual classroom Wi-Fi before
 > the first class.** Network surprises (especially AP isolation) are far easier to
