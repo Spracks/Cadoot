@@ -17,6 +17,8 @@ interface RevealData {
   correctIndex: number;
   distribution: number[];
   leaderboard: LeaderboardEntry[];
+  /** Ceiling a flawless player could hold by now; scales the host's bars. */
+  maxPossible: number;
 }
 
 interface State {

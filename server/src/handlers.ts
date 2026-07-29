@@ -4,6 +4,7 @@ import {
   QuizSchema,
   computeScore,
   streakBonus,
+  maxPossibleScore,
   DEFAULT_SCORE_CONFIG,
   type ClientToServerEvents,
   type ServerToClientEvents,
@@ -97,6 +98,7 @@ export function registerHandlers(io: IoServer): GameManager {
           correctIndex: q.correctIndex,
           distribution: distributionFor(game, q.options.length),
           leaderboard: leaderboard(game),
+          maxPossible: maxPossible(game),
         },
         myResult: {
           correct: player.lastCorrect,
@@ -134,6 +136,14 @@ export function registerHandlers(io: IoServer): GameManager {
 
   function sortedPlayers(game: Game): Player[] {
     return [...game.players.values()].sort((a, b) => b.score - a.score);
+  }
+
+  /**
+   * Score ceiling across every question scored so far. Computed here rather
+   * than on the client so it stays correct if scoring rules ever change.
+   */
+  function maxPossible(game: Game): number {
+    return maxPossibleScore(game.currentIndex + 1);
   }
 
   function leaderboard(game: Game): LeaderboardEntry[] {
@@ -177,6 +187,7 @@ export function registerHandlers(io: IoServer): GameManager {
           correctIndex: q.correctIndex,
           distribution: distributionFor(game, q.options.length),
           leaderboard: leaderboard(game),
+          maxPossible: maxPossible(game),
         },
         finalLeaderboard: null,
       };
@@ -268,6 +279,7 @@ export function registerHandlers(io: IoServer): GameManager {
       correctIndex: question.correctIndex,
       distribution,
       leaderboard: lb,
+      maxPossible: maxPossible(game),
     });
 
     for (const p of game.players.values()) {

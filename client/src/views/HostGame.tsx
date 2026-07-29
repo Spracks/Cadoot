@@ -183,7 +183,11 @@ function HostReveal() {
       />
       <div className="reveal-lb">
         <h2>Leaderboard</h2>
-        <AnimatedLeaderboard entries={reveal.leaderboard} limit={10} />
+        <AnimatedLeaderboard
+          entries={reveal.leaderboard}
+          maxPossible={reveal.maxPossible}
+          limit={10}
+        />
       </div>
       <div className="host-controls">
         {isLast ? (

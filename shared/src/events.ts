@@ -71,6 +71,8 @@ export interface StateSync {
     correctIndex: number;
     distribution: AnswerDistribution;
     leaderboard: LeaderboardEntry[];
+    /** Ceiling a flawless player could hold by now; scales the host's bars. */
+    maxPossible: number;
   } | null;
   myResult: PersonalResult | null;
   finalLeaderboard: LeaderboardEntry[] | null;
@@ -93,6 +95,8 @@ export interface HostStateSync {
     correctIndex: number;
     distribution: AnswerDistribution;
     leaderboard: LeaderboardEntry[];
+    /** Ceiling a flawless player could hold by now; scales the host's bars. */
+    maxPossible: number;
   } | null;
   finalLeaderboard: LeaderboardEntry[] | null;
 }
@@ -122,6 +126,8 @@ export interface ServerToClientEvents {
     correctIndex: number;
     distribution: AnswerDistribution;
     leaderboard: LeaderboardEntry[];
+    /** Ceiling a flawless player could hold by now; scales the host's bars. */
+    maxPossible: number;
   }) => void;
   /** Personal per-player result, sent only to that player at reveal. */
   'answer:result': (data: PersonalResult) => void;

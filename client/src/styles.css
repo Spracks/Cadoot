@@ -614,9 +614,34 @@ body {
   right: 0;
   height: var(--lb-row-h);
   padding: 0 14px;
+  /* The proportional bar is the only white here, so the row that carries it
+     goes transparent and its text flips to light. */
+  background: transparent;
+  color: #fff;
+  grid-template-columns: 2.2rem 26px minmax(5rem, 9rem) 1fr auto auto;
   transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 260ms ease;
   will-change: transform;
+}
+.leaderboard.lb-animated .lb-rank {
+  color: rgba(255, 255, 255, 0.75);
+}
+.leaderboard.lb-animated .lb-delta.same {
+  color: rgba(255, 255, 255, 0.5);
+}
+/* Track spans the leftover column; the fill's width is the score itself. */
+.lb-track {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.lb-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: #fff;
 }
 /* Rank movement is the summary of the animation, so it lands after it. */
 .leaderboard.lb-animated .lb-delta {

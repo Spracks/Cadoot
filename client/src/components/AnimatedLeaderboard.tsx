@@ -39,10 +39,13 @@ function easeOutCubic(t: number): number {
  */
 export default function AnimatedLeaderboard({
   entries,
+  maxPossible,
   limit = 10,
   highlight = null,
 }: {
   entries: LeaderboardEntry[];
+  /** Score a flawless player would hold by now; each bar is drawn against it. */
+  maxPossible: number;
   limit?: number;
   highlight?: string | null;
 }) {
@@ -67,6 +70,7 @@ export default function AnimatedLeaderboard({
   const rowRefs = useRef(new Map<string, HTMLLIElement>());
   const scoreRefs = useRef(new Map<string, HTMLSpanElement>());
   const rankRefs = useRef(new Map<string, HTMLSpanElement>());
+  const fillRefs = useRef(new Map<string, HTMLSpanElement>());
 
   useEffect(() => {
     setSettled(false);
@@ -109,6 +113,13 @@ export default function AnimatedLeaderboard({
         if (score) score.textContent = String(Math.round(v));
         const rank = rankRefs.current.get(r.nickname);
         if (rank) rank.textContent = String(i + 1);
+        // Width is set per frame rather than via a CSS transition, so the bar
+        // grows in lockstep with the number it represents.
+        const fill = fillRefs.current.get(r.nickname);
+        if (fill) {
+          const pct = maxPossible > 0 ? (v / maxPossible) * 100 : 0;
+          fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        }
       });
 
       if (instant) {
@@ -144,7 +155,7 @@ export default function AnimatedLeaderboard({
       clearTimeout(hold);
       cancelAnimationFrame(raf);
     };
-  }, [rows, limit]);
+  }, [rows, limit, maxPossible]);
 
   if (rows.length === 0) return <p className="muted">No players yet.</p>;
 
@@ -173,6 +184,15 @@ export default function AnimatedLeaderboard({
           </span>
           <AvatarBadge id={r.avatar} className="lb-avatar" />
           <span className="lb-name">{r.nickname}</span>
+          <span className="lb-track">
+            <span
+              className="lb-fill"
+              ref={(el) => {
+                if (el) fillRefs.current.set(r.nickname, el);
+                else fillRefs.current.delete(r.nickname);
+              }}
+            />
+          </span>
           <RankDelta delta={r.delta} />
           <span
             className="lb-score"
