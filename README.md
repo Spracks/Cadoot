@@ -53,7 +53,9 @@ In dev, open the client at `http://localhost:5173`.
 3. The host clicks **Start**. Each question shows on the shared screen with a timer.
 4. Students tap a colored answer on their device. **Faster correct answers score more.**
 5. After each question: the correct answer, the answer distribution, and the leaderboard.
-6. At the end: a top-3 podium and final standings.
+6. At the end: a top-3 podium and final standings — plus a **download** on every
+   screen, so the results outlive the game (see [Taking the results with
+   you](#-taking-the-results-with-you)).
 
 **Dropped connections are handled.** If a student's phone sleeps or briefly loses
 Wi-Fi, their browser automatically rejoins the same game and keeps their score — no
@@ -61,6 +63,33 @@ re-entering the PIN. Disconnected players show dimmed on the host's lobby.
 
 Games live only in the server's memory — closing the server or the host tab ends
 the game. There is no database, no accounts, and no telemetry.
+
+---
+
+## 📥 Taking the results with you
+
+Because nothing is stored, the "Game over" screen is the only chance to keep a
+record — so both screens offer one, as an **HTML page** (readable offline,
+prints to PDF) or a **CSV** (opens in Excel / Sheets).
+
+**Students** get a **study sheet**: every question they were asked, all the
+options, the correct answer, and the one they picked — with the ones they got
+wrong marked. This is the point of the feature: revising from your own mistakes
+after the game.
+
+**The host** gets a **class report**: final standings, plus per-question class
+accuracy sorted **hardest first**, with the answer breakdown under each question
+so a popular wrong answer is obvious at a glance. It's deliberately aggregate —
+it shows *how many* picked each option, never *who*.
+
+Both files are generated **in the browser** from data the device already has.
+Nothing is uploaded and no new data is retained server-side, so this doesn't
+weaken the "nothing leaves your network" guarantee. Files are named after the
+quiz (e.g. `Unit-3-Cell-Biology-Ava-results.html`).
+
+> Question text carries over as written. Fenced code blocks and `inline code`
+> are rendered; `$math$` is left as source, since typesetting it would mean
+> embedding font files in every download.
 
 ---
 
@@ -171,6 +200,9 @@ any mismatch between what the server sends and what the client expects.
 - The correct answer is **never sent to players' devices** until the reveal — the
   question payload sent to players omits it entirely.
 - Answer timing is measured **on the server**, so clients can't spoof a faster time.
+- Post-game downloads are sent **point-to-point**, not broadcast: a student's
+  review contains only their own answers, and the class report goes to the host
+  socket alone. Answers appear in a review only after they've been revealed.
 
 ---
 

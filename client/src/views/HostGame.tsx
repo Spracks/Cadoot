@@ -10,6 +10,12 @@ import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
 import AvatarBadge from '../components/AvatarBadge';
 import { playSound } from '../sound';
+import {
+  classReportCsv,
+  classReportHtml,
+  classReportName,
+  downloadFile,
+} from '../results';
 
 export default function HostGame() {
   const phase = useStore((s) => s.serverPhase);
@@ -236,9 +242,54 @@ function HostOver() {
           <Leaderboard entries={lb.slice(3)} />
         </div>
       )}
+      <SaveReport />
       <button className="btn ghost" onClick={reset}>
         New game
       </button>
+    </div>
+  );
+}
+
+/**
+ * The host's copy: standings plus how the class did on each question. Same
+ * one-chance-to-keep-it reasoning as the players' study sheet.
+ */
+function SaveReport() {
+  const report = useStore((s) => s.hostReport);
+  if (!report || report.questions.length === 0) return null;
+  return (
+    <div className="save-results">
+      <p className="save-hint">
+        Students can save their own results on their devices. Your copy:
+      </p>
+      <div className="save-actions">
+        <button
+          className="btn primary"
+          onClick={() =>
+            downloadFile(
+              classReportName(report, 'html'),
+              'text/html;charset=utf-8',
+              classReportHtml(report),
+            )
+          }
+          title="Final standings plus per-question class accuracy, hardest first"
+        >
+          ⬇ Class report
+        </button>
+        <button
+          className="btn ghost"
+          onClick={() =>
+            downloadFile(
+              classReportName(report, 'csv'),
+              'text/csv;charset=utf-8',
+              classReportCsv(report),
+            )
+          }
+          title="The same report as a spreadsheet"
+        >
+          ⬇ .csv
+        </button>
+      </div>
     </div>
   );
 }

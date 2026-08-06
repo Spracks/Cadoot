@@ -1020,6 +1020,29 @@ body {
   z-index: 5;
 }
 
+/* ---------- Save your results (post-game downloads) ---------- */
+.save-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.save-hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+}
+.save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.save-actions .btn {
+  padding: 12px 20px;
+  font-size: 1rem;
+}
+
 /* ---------- Rich text (code + math) ---------- */
 .richtext {
   display: block;

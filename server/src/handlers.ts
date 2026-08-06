@@ -13,6 +13,9 @@ import {
   type PublicQuestion,
   type StateSync,
   type HostStateSync,
+  type PersonalReview,
+  type HostReport,
+  type QuestionStat,
 } from '@cadoot/shared';
 import { GameManager, type Game, type Player } from './game';
 
@@ -84,6 +87,7 @@ export function registerHandlers(io: IoServer): GameManager {
         reveal: null,
         myResult: null,
         finalLeaderboard: null,
+        review: null,
       };
     }
     if (game.phase === 'reveal' && q) {
@@ -110,6 +114,7 @@ export function registerHandlers(io: IoServer): GameManager {
           streakBonus: player.lastStreakBonus,
         },
         finalLeaderboard: null,
+        review: null,
       };
     }
     if (game.phase === 'over') {
@@ -121,6 +126,8 @@ export function registerHandlers(io: IoServer): GameManager {
         reveal: null,
         myResult: null,
         finalLeaderboard: leaderboard(game),
+        // A student who reloads after the game can still get their study sheet.
+        review: buildReview(game, player),
       };
     }
     return {
@@ -131,6 +138,7 @@ export function registerHandlers(io: IoServer): GameManager {
       reveal: null,
       myResult: null,
       finalLeaderboard: null,
+      review: null,
     };
   }
 
@@ -159,6 +167,87 @@ export function registerHandlers(io: IoServer): GameManager {
     }));
   }
 
+  /**
+   * One player's post-game review, for their downloadable study sheet. Built
+   * from their recorded history, so a game ended early only reports the
+   * questions that actually counted.
+   */
+  function buildReview(game: Game, player: Player): PersonalReview {
+    const ranked = sortedPlayers(game);
+    return {
+      quizTitle: game.quiz.title,
+      finishedAt: game.finishedAt ?? Date.now(),
+      nickname: player.nickname,
+      rank: ranked.findIndex((p) => p.id === player.id) + 1,
+      totalPlayers: game.players.size,
+      score: player.score,
+      correctCount: player.history.filter((h) => h.correct).length,
+      answers: player.history.map((h) => {
+        const q = game.quiz.questions[h.questionIndex]!;
+        return {
+          questionIndex: h.questionIndex,
+          text: q.text,
+          options: q.options,
+          correctIndex: q.correctIndex,
+          answerIndex: h.answerIndex,
+          correct: h.correct,
+          pointsEarned: h.points,
+        };
+      }),
+    };
+  }
+
+  /**
+   * The host's class report: final standings plus how the class did on each
+   * question. Aggregate by design — it never breaks out who answered what.
+   */
+  function buildReport(game: Game): HostReport {
+    const players = [...game.players.values()];
+    const questions: QuestionStat[] = [];
+    for (let i = 0; i < game.questionsScored; i++) {
+      const q = game.quiz.questions[i];
+      if (!q) continue;
+      const distribution = new Array<number>(q.options.length).fill(0);
+      let correctCount = 0;
+      let noAnswerCount = 0;
+      for (const p of players) {
+        // History is appended once per scored question, in order, for every
+        // player — nobody can join mid-game — so index i is question i.
+        const rec = p.history[i];
+        if (!rec || rec.answerIndex === null) {
+          noAnswerCount++;
+          continue;
+        }
+        if (rec.answerIndex < distribution.length) {
+          distribution[rec.answerIndex] = (distribution[rec.answerIndex] ?? 0) + 1;
+        }
+        if (rec.correct) correctCount++;
+      }
+      questions.push({
+        questionIndex: i,
+        text: q.text,
+        options: q.options,
+        correctIndex: q.correctIndex,
+        distribution,
+        correctCount,
+        noAnswerCount,
+        accuracy: players.length > 0 ? correctCount / players.length : 0,
+      });
+    }
+    return {
+      quizTitle: game.quiz.title,
+      finishedAt: game.finishedAt ?? Date.now(),
+      playerCount: players.length,
+      standings: sortedPlayers(game).map((p, i) => ({
+        rank: i + 1,
+        nickname: p.nickname,
+        score: p.score,
+        correctCount: p.history.filter((h) => h.correct).length,
+      })),
+      questions,
+    };
+  }
+
   /** Full snapshot for a reconnecting host, mirroring the live game state. */
   function buildHostSync(game: Game): HostStateSync {
     const q = game.quiz.questions[game.currentIndex];
@@ -175,6 +264,7 @@ export function registerHandlers(io: IoServer): GameManager {
         remainingMs: remainingMs(game),
         reveal: null,
         finalLeaderboard: null,
+        report: null,
       };
     }
     if (game.phase === 'reveal' && q) {
@@ -190,6 +280,7 @@ export function registerHandlers(io: IoServer): GameManager {
           maxPossible: maxPossible(game),
         },
         finalLeaderboard: null,
+        report: null,
       };
     }
     if (game.phase === 'over') {
@@ -200,6 +291,7 @@ export function registerHandlers(io: IoServer): GameManager {
         remainingMs: 0,
         reveal: null,
         finalLeaderboard: leaderboard(game),
+        report: buildReport(game),
       };
     }
     return {
@@ -209,6 +301,7 @@ export function registerHandlers(io: IoServer): GameManager {
       remainingMs: 0,
       reveal: null,
       finalLeaderboard: null,
+      report: null,
     };
   }
 
@@ -262,7 +355,18 @@ export function registerHandlers(io: IoServer): GameManager {
     const question = game.quiz.questions[game.currentIndex];
     if (!question) return;
 
-    for (const p of game.players.values()) p.score += p.lastPoints;
+    for (const p of game.players.values()) {
+      p.score += p.lastPoints;
+      // Commit this question to the permanent record before the next one
+      // overwrites the `last*` fields. Non-answerers are recorded too.
+      p.history.push({
+        questionIndex: game.currentIndex,
+        answerIndex: p.answered ? p.answerIndex : null,
+        correct: p.lastCorrect,
+        points: p.lastPoints,
+      });
+    }
+    game.questionsScored = game.currentIndex + 1;
     const distribution = distributionFor(game, question.options.length);
 
     // Recompute standings, then record each player's rank movement vs the
@@ -298,7 +402,16 @@ export function registerHandlers(io: IoServer): GameManager {
   function gameOver(game: Game): void {
     clearTimers(game);
     game.phase = 'over';
+    game.finishedAt = Date.now();
     io.to(game.pin).emit('game:over', { leaderboard: leaderboard(game) });
+
+    // Post-game downloads. Both are point-to-point rather than broadcast: a
+    // student gets only their own answers, and the class report stays on the
+    // host's machine.
+    io.to(game.hostSocketId).emit('results:report', buildReport(game));
+    for (const p of game.players.values()) {
+      io.to(p.socketId).emit('results:review', buildReview(game, p));
+    }
   }
 
   io.on('connection', (socket: IoSocket) => {
@@ -405,6 +518,7 @@ export function registerHandlers(io: IoServer): GameManager {
         lastStreakBonus: 0,
         rank: null,
         lastRankDelta: null,
+        history: [],
       });
       socket.join(pin);
       ack({ ok: true, playerId: id });

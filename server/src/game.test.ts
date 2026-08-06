@@ -248,6 +248,132 @@ describe('game flow (end-to-end over sockets)', () => {
     }
   }, 15000);
 
+  it('sends each player their own answers and the host a class report', async () => {
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    const bob = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz: QUIZ });
+      const pin = created.pin as string;
+      await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+      await bob.emitWithAck('player:join', { pin, nickname: 'Bob' });
+
+      // Q1: Alice correct, Bob wrong.
+      const shown1 = once(alice, 'question:show');
+      host.emit('host:startGame');
+      await shown1;
+      const reveal1 = once(host, 'question:results');
+      alice.emit('player:answer', { optionIndex: 0 });
+      bob.emit('player:answer', { optionIndex: 1 });
+      await reveal1;
+
+      // Q2: Alice correct, Bob never answers — the host reveals early.
+      const shown2 = once(alice, 'question:show');
+      host.emit('host:nextQuestion');
+      await shown2;
+      const reveal2 = once(host, 'question:results');
+      alice.emit('player:answer', { optionIndex: 1 });
+      host.emit('host:skipQuestion');
+      await reveal2;
+
+      const aliceReviewP = once<any>(alice, 'results:review');
+      const bobReviewP = once<any>(bob, 'results:review');
+      const reportP = once<any>(host, 'results:report');
+      host.emit('host:nextQuestion'); // past the last question -> game over
+
+      const [aliceReview, bobReview, report] = await Promise.all([
+        aliceReviewP,
+        bobReviewP,
+        reportP,
+      ]);
+
+      // Each player gets their OWN answers, with the correct one now included.
+      expect(aliceReview.nickname).toBe('Alice');
+      expect(aliceReview.correctCount).toBe(2);
+      expect(aliceReview.answers).toHaveLength(2);
+      expect(aliceReview.answers[0]).toMatchObject({
+        questionIndex: 0,
+        text: 'Q1',
+        correctIndex: 0,
+        answerIndex: 0,
+        correct: true,
+      });
+      // PRIVACY: a player's review never carries anyone else's results.
+      expect(JSON.stringify(aliceReview)).not.toContain('Bob');
+
+      // A skipped question still counts, and a non-answer is recorded as such.
+      expect(bobReview.correctCount).toBe(0);
+      expect(bobReview.answers[0]).toMatchObject({ answerIndex: 1, correct: false });
+      expect(bobReview.answers[1]).toMatchObject({ answerIndex: null, correct: false });
+
+      // The host report is aggregate: per-question accuracy, plus standings.
+      expect(report.playerCount).toBe(2);
+      expect(report.questions).toHaveLength(2);
+      expect(report.questions[0]).toMatchObject({
+        correctCount: 1,
+        noAnswerCount: 0,
+        accuracy: 0.5,
+        distribution: [1, 1, 0, 0],
+      });
+      expect(report.questions[1]).toMatchObject({
+        correctCount: 1,
+        noAnswerCount: 1,
+        distribution: [0, 1],
+      });
+      expect(report.standings[0]).toMatchObject({
+        rank: 1,
+        nickname: 'Alice',
+        correctCount: 2,
+      });
+    } finally {
+      host.close();
+      alice.close();
+      bob.close();
+      teardown();
+    }
+  }, 15000);
+
+  it('still hands a reloading player their results after the game ends', async () => {
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz: QUIZ });
+      const pin = created.pin as string;
+      const aJoin = await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+      const aliceId = aJoin.playerId as string;
+
+      const shown = once(alice, 'question:show');
+      host.emit('host:startGame');
+      await shown;
+      const revealP = once(host, 'question:results');
+      alice.emit('player:answer', { optionIndex: 0 });
+      await revealP;
+
+      const overP = once(host, 'game:over');
+      host.emit('host:endGame'); // ends mid-quiz, after one scored question
+      await overP;
+
+      // Alice's phone reloads on the results screen.
+      alice.close();
+      const alice2 = connect(url);
+      const syncP = once<any>(alice2, 'state:sync');
+      await alice2.emitWithAck('player:rejoin', { pin, playerId: aliceId });
+      const snap = await syncP;
+
+      expect(snap.phase).toBe('over');
+      // Only the question that was actually scored appears — Q2 never ran.
+      expect(snap.review.answers).toHaveLength(1);
+      expect(snap.review.answers[0].correct).toBe(true);
+      alice2.close();
+    } finally {
+      host.close();
+      alice.close();
+      teardown();
+    }
+  }, 15000);
+
   it('tracks answer streaks and reports rank movement', async () => {
     const { url, teardown } = await setup();
     const host = connect(url);

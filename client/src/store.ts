@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type {
+  HostReport,
   LeaderboardEntry,
   PersonalResult,
+  PersonalReview,
   PlayerSummary,
   PublicQuestion,
   Quiz,
@@ -32,6 +34,10 @@ interface State {
   reveal: RevealData | null;
   myResult: PersonalResult | null;
   finalLeaderboard: LeaderboardEntry[] | null;
+  /** This player's downloadable results; arrives when the game ends. */
+  myReview: PersonalReview | null;
+  /** The host's downloadable class report; arrives when the game ends. */
+  hostReport: HostReport | null;
   hasAnswered: boolean;
   myNickname: string | null;
   myAvatar: string;
@@ -160,6 +166,9 @@ export const useStore = create<State>((set, get) => {
     set({ finalLeaderboard: leaderboard, serverPhase: 'over' }),
   );
 
+  socket.on('results:review', (myReview) => set({ myReview }));
+  socket.on('results:report', (hostReport) => set({ hostReport }));
+
   socket.on('game:error', ({ message }) => set({ error: message }));
   socket.on('game:notice', ({ message }) => flashNotice(message));
 
@@ -175,6 +184,7 @@ export const useStore = create<State>((set, get) => {
       reveal: s.reveal,
       myResult: s.myResult,
       finalLeaderboard: s.finalLeaderboard,
+      myReview: s.review,
     }),
   );
 
@@ -193,6 +203,7 @@ export const useStore = create<State>((set, get) => {
       },
       reveal: s.reveal,
       finalLeaderboard: s.finalLeaderboard,
+      hostReport: s.report,
       error: null,
     }),
   );
@@ -253,6 +264,8 @@ export const useStore = create<State>((set, get) => {
     reveal: null,
     myResult: null,
     finalLeaderboard: null,
+    myReview: null,
+    hostReport: null,
     hasAnswered: false,
     myNickname: null,
     myAvatar: DEFAULT_AVATAR,

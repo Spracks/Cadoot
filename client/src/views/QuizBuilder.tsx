@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Quiz } from '@cadoot/shared';
 import { tileStyle } from '../theme';
+import { downloadFile, slug } from '../results';
 import {
   draftToQuiz,
   emptyDraft,
@@ -57,15 +58,11 @@ export default function QuizBuilder({
       return;
     }
     setErrors([]);
-    const blob = new Blob([JSON.stringify(quiz, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${quiz.title.replace(/[^a-z0-9-_ ]/gi, '_').trim() || 'quiz'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(
+      `${slug(quiz.title, 'quiz')}.json`,
+      'application/json',
+      JSON.stringify(quiz, null, 2),
+    );
   }
 
   return (

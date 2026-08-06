@@ -58,6 +58,78 @@ export interface PersonalResult {
 export type AnswerDistribution = number[];
 
 /**
+ * One question as it appeared to a single player, with the answer they gave.
+ *
+ * This is the ONE place a player's device is sent `correctIndex` — the game is
+ * over and every question here has already been revealed on the shared screen,
+ * so nothing is leaked that the player hasn't already seen.
+ */
+export interface ReviewAnswer {
+  /** 0-based position in the quiz. */
+  questionIndex: number;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  /** Which option this player picked, or null if they never answered. */
+  answerIndex: number | null;
+  correct: boolean;
+  pointsEarned: number;
+}
+
+/**
+ * A player's own post-game review — everything their downloadable study sheet
+ * is built from. Sent only to that player, once the game is over.
+ */
+export interface PersonalReview {
+  quizTitle: string;
+  /** Epoch ms when the game ended; stamps the downloaded file. */
+  finishedAt: number;
+  nickname: string;
+  rank: number;
+  totalPlayers: number;
+  score: number;
+  correctCount: number;
+  /** One entry per question that was actually scored, in play order. */
+  answers: ReviewAnswer[];
+}
+
+/** How the class as a whole did on one question. */
+export interface QuestionStat {
+  questionIndex: number;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  /** Answers received per option index. */
+  distribution: AnswerDistribution;
+  correctCount: number;
+  /** Players who never answered this question. */
+  noAnswerCount: number;
+  /** Share of all players who got it right, 0–1. */
+  accuracy: number;
+}
+
+/** One row of the host's final standings. */
+export interface StandingsRow {
+  rank: number;
+  nickname: string;
+  score: number;
+  correctCount: number;
+}
+
+/**
+ * The host's post-game class report: final standings plus per-question class
+ * accuracy — enough to see which questions need reteaching. Deliberately
+ * aggregate: it does not break out who answered what.
+ */
+export interface HostReport {
+  quizTitle: string;
+  finishedAt: number;
+  playerCount: number;
+  standings: StandingsRow[];
+  questions: QuestionStat[];
+}
+
+/**
  * A full snapshot of the current game state for one player, sent when they
  * (re)connect so their screen can jump straight to the right place mid-game.
  */
@@ -76,6 +148,8 @@ export interface StateSync {
   } | null;
   myResult: PersonalResult | null;
   finalLeaderboard: LeaderboardEntry[] | null;
+  /** Downloadable post-game review; only present once the game is over. */
+  review: PersonalReview | null;
 }
 
 /**
@@ -99,6 +173,8 @@ export interface HostStateSync {
     maxPossible: number;
   } | null;
   finalLeaderboard: LeaderboardEntry[] | null;
+  /** Downloadable class report; only present once the game is over. */
+  report: HostReport | null;
 }
 
 export interface CreateGameAck {
@@ -132,6 +208,10 @@ export interface ServerToClientEvents {
   /** Personal per-player result, sent only to that player at reveal. */
   'answer:result': (data: PersonalResult) => void;
   'game:over': (data: { leaderboard: LeaderboardEntry[] }) => void;
+  /** Post-game study material, sent only to the player it describes. */
+  'results:review': (data: PersonalReview) => void;
+  /** Post-game class report, sent only to the host. */
+  'results:report': (data: HostReport) => void;
   'state:sync': (data: StateSync) => void;
   /** Full host snapshot after a host reconnect. */
   'host:sync': (data: HostStateSync) => void;

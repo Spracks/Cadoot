@@ -6,6 +6,12 @@ import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
 import AvatarBadge from '../components/AvatarBadge';
 import { AVATARS } from '../avatars';
+import {
+  downloadFile,
+  studySheetCsv,
+  studySheetHtml,
+  studySheetName,
+} from '../results';
 
 export default function PlayerGame() {
   const pin = useStore((s) => s.pin);
@@ -204,9 +210,54 @@ function PlayerOver() {
       <div className="card">
         <Leaderboard entries={lb} limit={5} highlight={nickname} />
       </div>
+      <SaveResults />
       <button className="btn ghost" onClick={reset}>
         Leave
       </button>
+    </div>
+  );
+}
+
+/**
+ * The game is about to vanish — nothing is stored server-side — so this is the
+ * one chance to keep a record of it. Offered before "Leave" for that reason.
+ */
+function SaveResults() {
+  const review = useStore((s) => s.myReview);
+  if (!review || review.answers.length === 0) return null;
+  return (
+    <div className="save-results">
+      <p className="save-hint">
+        Keep every question and answer to revise from later:
+      </p>
+      <div className="save-actions">
+        <button
+          className="btn primary"
+          onClick={() =>
+            downloadFile(
+              studySheetName(review, 'html'),
+              'text/html;charset=utf-8',
+              studySheetHtml(review),
+            )
+          }
+          title="A printable page with every question, your answer, and the right answer"
+        >
+          ⬇ Study sheet
+        </button>
+        <button
+          className="btn ghost"
+          onClick={() =>
+            downloadFile(
+              studySheetName(review, 'csv'),
+              'text/csv;charset=utf-8',
+              studySheetCsv(review),
+            )
+          }
+          title="The same results as a spreadsheet"
+        >
+          ⬇ .csv
+        </button>
+      </div>
     </div>
   );
 }

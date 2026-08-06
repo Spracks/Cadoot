@@ -1,6 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { Quiz } from '@cadoot/shared';
 
+/**
+ * What one player did on one scored question. Appended at reveal so the
+ * post-game review can replay the whole game — the `last*` fields below only
+ * ever describe the question in progress.
+ */
+export interface AnswerRecord {
+  questionIndex: number;
+  /** Option picked, or null if they ran out of time. */
+  answerIndex: number | null;
+  correct: boolean;
+  points: number;
+}
+
 export interface Player {
   id: string;
   nickname: string;
@@ -20,6 +33,8 @@ export interface Player {
   rank: number | null;
   /** Rank change at the most recent reveal (positive = moved up). */
   lastRankDelta: number | null;
+  /** One entry per scored question, in play order. Feeds the study sheet. */
+  history: AnswerRecord[];
 }
 
 export type GamePhase = 'lobby' | 'question' | 'reveal' | 'over';
@@ -36,6 +51,13 @@ export interface Game {
   players: Map<string, Player>;
   phase: GamePhase;
   currentIndex: number;
+  /**
+   * How many questions have actually been revealed and scored. Always a prefix
+   * of the quiz — a game ended mid-question leaves that question out.
+   */
+  questionsScored: number;
+  /** Epoch ms the game ended, so post-game downloads carry a stable date. */
+  finishedAt: number | null;
   questionStartedAt: number | null;
   questionTimer: ReturnType<typeof setTimeout> | null;
   tickTimer: ReturnType<typeof setInterval> | null;
@@ -59,6 +81,8 @@ export class GameManager {
       players: new Map(),
       phase: 'lobby',
       currentIndex: -1,
+      questionsScored: 0,
+      finishedAt: null,
       questionStartedAt: null,
       questionTimer: null,
       tickTimer: null,
