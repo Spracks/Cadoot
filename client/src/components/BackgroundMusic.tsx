@@ -1,15 +1,23 @@
 import { useEffect } from 'react';
 import { useStore } from '../store';
 import { ensureCtx } from '../sound';
-import { setMusicDucked, startMusic, stopMusic } from '../music';
+import { setMusicMood, startMusic, stopMusic } from '../music';
+import { LOW_TIME_MS } from './Countdown';
 
 /**
- * Loops the synthesized background music on the host screen while sound is on,
- * quieter while a question is up so it doesn't compete with reading.
+ * Loops the synthesized background music on the host screen while sound is on:
+ * quieter while a question is up so it doesn't compete with reading, then a
+ * driving "hurry" variation over the countdown's final seconds.
  */
 export default function BackgroundMusic() {
   const soundOn = useStore((s) => s.soundOn);
-  const phase = useStore((s) => s.serverPhase);
+  const mood = useStore((s) =>
+    s.serverPhase !== 'question'
+      ? 'normal'
+      : s.remainingMs <= LOW_TIME_MS
+        ? 'hurry'
+        : 'question',
+  );
 
   useEffect(() => {
     if (!soundOn) return;
@@ -25,8 +33,8 @@ export default function BackgroundMusic() {
   }, [soundOn]);
 
   useEffect(() => {
-    setMusicDucked(phase === 'question');
-  }, [phase]);
+    setMusicMood(mood);
+  }, [mood]);
 
   return null;
 }

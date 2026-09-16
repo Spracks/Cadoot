@@ -15,6 +15,8 @@ const TICK_MS = 25;
 
 const LEVEL = 0.5; // overall music volume, under the sound effects
 const DUCK = 0.45; // fraction of LEVEL while a question is on screen
+const HURRY = 0.85; // fraction of LEVEL in the last seconds of a question
+const HURRY_SECS = 5; // how long the hurry build lasts; matches LOW_TIME_MS
 const LEAD_LEVEL = 0.04; // melody volume; raise it to bring the tune forward
 
 // Chords as MIDI notes (root, third, fifth).
@@ -78,11 +80,21 @@ let bus: GainNode | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let nextTime = 0;
 let step = 0;
-let ducked = false;
+let mood: MusicMood = 'normal';
+let restartPending = false;
+let hurryStart = 0; // audio time the hurry build began
+let riser: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
 let noise: AudioBuffer | null = null;
 
+/**
+ * normal: the full loop. question: the same, quieter, while students read.
+ * hurry: time is nearly up — a stripped-down, driving variation.
+ */
+export type MusicMood = 'normal' | 'question' | 'hurry';
+
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
-const target = () => LEVEL * (ducked ? DUCK : 1);
+const target = () =>
+  LEVEL * (mood === 'hurry' ? HURRY : mood === 'question' ? DUCK : 1);
 
 export function startMusic(): void {
   if (timer) return;
@@ -94,12 +106,21 @@ export function startMusic(): void {
   bus.gain.setTargetAtTime(target(), ac.currentTime, 0.4);
   nextTime = ac.currentTime + 0.1;
   step = 0;
+  restartPending = false;
+  if (mood === 'hurry') beginHurry(ac, bus, nextTime);
   timer = setInterval(() => {
     if (!bus) return;
     // After the tab was throttled or the context suspended, don't try to
     // "catch up" by blasting every missed note at once.
     if (nextTime < ac.currentTime - 0.1) nextTime = ac.currentTime + 0.05;
     while (nextTime < ac.currentTime + LOOKAHEAD) {
+      if (restartPending) {
+        // Coming out of the hurry variation: land on the top of the song
+        // with a cymbal, so the change reads as a deliberate ending.
+        restartPending = false;
+        step = 0;
+        crash(ac, bus, nextTime);
+      }
       scheduleStep(ac, bus, step, nextTime);
       nextTime += STEP;
       step++;
@@ -113,16 +134,58 @@ export function stopMusic(): void {
   const old = bus;
   bus = null;
   if (!old) return;
+  endRiser(old.context.currentTime);
   const ac = old.context;
   old.gain.cancelScheduledValues(ac.currentTime);
   old.gain.setTargetAtTime(0, ac.currentTime, 0.15);
   setTimeout(() => old.disconnect(), 800);
 }
 
-/** Lower the music while students are reading and answering. */
-export function setMusicDucked(on: boolean): void {
-  ducked = on;
-  if (bus) bus.gain.setTargetAtTime(target(), bus.context.currentTime, 0.3);
+/** Follow the game: quieter during questions, urgent as time runs out. */
+export function setMusicMood(next: MusicMood): void {
+  if (next === mood) return;
+  if (mood === 'hurry') {
+    restartPending = true;
+    endRiser(nextTime);
+  }
+  mood = next;
+  if (!bus) return;
+  if (mood === 'hurry') beginHurry(bus.context as AudioContext, bus, nextTime);
+  bus.gain.setTargetAtTime(target(), bus.context.currentTime, 0.3);
+}
+
+/**
+ * Start the hurry build: everything in the hurry variation scales with how far
+ * into it we are, and a filtered-noise "whoosh" rises underneath until the end.
+ */
+function beginHurry(ac: AudioContext, out: AudioNode, t: number): void {
+  hurryStart = t;
+  endRiser(t);
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac);
+  src.loop = true;
+  const filter = ac.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.Q.value = 3;
+  filter.frequency.setValueAtTime(300, t);
+  filter.frequency.exponentialRampToValueAtTime(6000, t + HURRY_SECS);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.14, t + HURRY_SECS);
+  src.connect(filter).connect(g).connect(out);
+  src.start(t);
+  riser = { src, gain: g };
+}
+
+function endRiser(t: number): void {
+  if (!riser) return;
+  const { src, gain } = riser;
+  riser = null;
+  const at = Math.max(t, gain.context.currentTime);
+  if (gain.gain.cancelAndHoldAtTime) gain.gain.cancelAndHoldAtTime(at);
+  else gain.gain.cancelScheduledValues(at);
+  gain.gain.setTargetAtTime(0, at, 0.03);
+  src.stop(at + 0.3);
 }
 
 function scheduleStep(
@@ -140,6 +203,30 @@ function scheduleStep(
   const lastBar = barIndex === SONG.length - 1;
   // Bass, kept in one comfortable octave (A1–G#2) whatever the chord.
   const bassRoot = ((chord[0] - 33) % 12) + 33;
+
+  if (mood === 'hurry') {
+    // Melody and marimba drop out and the groove tightens, building as the
+    // clock runs down (p goes 0 → 1 over the final seconds).
+    const p = Math.min(1, Math.max(0, (t - hurryStart) / HURRY_SECS));
+
+    // Kick on every beat; the snare builds from backbeat to 8ths to a 16th roll.
+    if (s % 4 === 0) kick(ac, out, t);
+    const snareEvery = p < 0.4 ? 8 : p < 0.75 ? 2 : 1;
+    if (s % snareEvery === (snareEvery === 8 ? 4 : 0)) {
+      clap(ac, out, t, 0.05 + p * 0.09);
+    }
+    hat(ac, out, t, s % 2 === 0 ? 0.06 : 0.03);
+
+    // Driving staccato bass on every 16th, jumping an octave on the offbeats.
+    bass(ac, out, t, hz(bassRoot + (s % 4 === 2 ? 12 : 0)), STEP * 0.8);
+
+    // Alarm: a clashing half-step pair on 8ths that creeps upward.
+    if (s % 2 === 0) {
+      const top = chord[0] + 24 + Math.round(p * 6);
+      alarm(ac, out, t, hz(s % 4 === 0 ? top : top + 1));
+    }
+    return;
+  }
 
   // Drums — B gets busier hats, and the last bar a clap fill back to the top.
   if (s === 0 || s === 8) kick(ac, out, t);
@@ -266,7 +353,7 @@ function kick(ac: AudioContext, out: AudioNode, t: number): void {
 
 function noiseBuffer(ac: AudioContext): AudioBuffer {
   if (noise && noise.sampleRate === ac.sampleRate) return noise;
-  const len = Math.floor(ac.sampleRate * 0.3);
+  const len = Math.floor(ac.sampleRate * 1);
   noise = ac.createBuffer(1, len, ac.sampleRate);
   const data = noise.getChannelData(0);
   for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
@@ -298,4 +385,22 @@ function hat(ac: AudioContext, out: AudioNode, t: number, peak: number): void {
 
 function clap(ac: AudioContext, out: AudioNode, t: number, peak: number): void {
   noiseHit(ac, out, t, 'bandpass', 1500, peak, 0.12);
+}
+
+/** A short, buzzy stab for the hurry alarm. */
+function alarm(ac: AudioContext, out: AudioNode, t: number, freq: number): void {
+  const filter = ac.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 3000;
+  filter.connect(envGain(ac, out, t, 0.03, 0.09));
+  const o = ac.createOscillator();
+  o.type = 'square';
+  o.frequency.value = freq;
+  o.connect(filter);
+  o.start(t);
+  o.stop(t + 0.11);
+}
+
+function crash(ac: AudioContext, out: AudioNode, t: number): void {
+  noiseHit(ac, out, t, 'highpass', 5000, 0.08, 0.9);
 }

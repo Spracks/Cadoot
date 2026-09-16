@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useStore } from '../store';
 import AnswerTiles from '../components/AnswerTiles';
-import Countdown from '../components/Countdown';
+import Countdown, { LOW_TIME_MS } from '../components/Countdown';
 import Leaderboard from '../components/Leaderboard';
 import AnimatedLeaderboard from '../components/AnimatedLeaderboard';
 import SoundToggle from '../components/SoundToggle';
@@ -135,8 +135,10 @@ function HostQuestion() {
     playSound('questionStart');
   }, [q?.index]);
   if (!q) return null;
+  const hurry = remainingMs <= LOW_TIME_MS;
   return (
     <div className="screen host-question">
+      {hurry && <div className="hurry-glow" aria-hidden="true" />}
       <div className="q-head">
         <span className="q-count">
           Question {q.index + 1} of {q.total}
