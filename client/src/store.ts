@@ -26,6 +26,8 @@ interface RevealData {
 interface State {
   role: Role;
   pin: string | null;
+  /** Title of the quiz being hosted (host only). */
+  quizTitle: string | null;
   players: PlayerSummary[];
   serverPhase: ServerPhase | null;
   question: PublicQuestion | null;
@@ -193,6 +195,7 @@ export const useStore = create<State>((set, get) => {
     set({
       role: 'host',
       pin: s.pin,
+      quizTitle: s.quizTitle,
       players: s.players,
       serverPhase: s.phase,
       question: s.question,
@@ -256,6 +259,7 @@ export const useStore = create<State>((set, get) => {
   return {
     role: 'none',
     pin: null,
+    quizTitle: null,
     players: [],
     serverPhase: null,
     question: null,
@@ -289,7 +293,13 @@ export const useStore = create<State>((set, get) => {
             if (res.hostToken) {
               saveHostSession({ pin: res.pin, hostToken: res.hostToken });
             }
-            set({ role: 'host', pin: res.pin, serverPhase: 'lobby', error: null });
+            set({
+              role: 'host',
+              pin: res.pin,
+              quizTitle: quiz.title,
+              serverPhase: 'lobby',
+              error: null,
+            });
             resolve();
           } else {
             const message = res.error ?? 'Could not create the game.';

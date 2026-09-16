@@ -38,6 +38,7 @@ export default function HostGame() {
 
 function HostLobby() {
   const pin = useStore((s) => s.pin)!;
+  const quizTitle = useStore((s) => s.quizTitle);
   const players = useStore((s) => s.players);
   const startGame = useStore((s) => s.startGame);
   const [urls, setUrls] = useState<string[]>([]);
@@ -61,7 +62,10 @@ function HostLobby() {
 
   return (
     <div className="screen host-lobby">
-      <h1 className="logo small">Cadoot</h1>
+      <div className="lobby-brand">
+        <h1 className="logo small">Cadoot</h1>
+        {quizTitle && <h2 className="lobby-title">{quizTitle}</h2>}
+      </div>
       <div className="lobby-head">
         <div className="pin-block">
           <span className="pin-label">Game PIN</span>

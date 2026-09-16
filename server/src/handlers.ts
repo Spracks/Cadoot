@@ -253,6 +253,7 @@ export function registerHandlers(io: IoServer): GameManager {
     const q = game.quiz.questions[game.currentIndex];
     const base = {
       pin: game.pin,
+      quizTitle: game.quiz.title,
       players: lobbyPlayers(game),
       answeredCount: answerProgress(game).answered,
     };

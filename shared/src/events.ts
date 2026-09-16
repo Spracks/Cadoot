@@ -159,6 +159,7 @@ export interface StateSync {
  */
 export interface HostStateSync {
   pin: string;
+  quizTitle: string;
   phase: 'lobby' | 'question' | 'reveal' | 'over';
   players: PlayerSummary[];
   /** How many connected players have locked in an answer this question. */
