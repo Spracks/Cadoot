@@ -6,6 +6,7 @@ import Countdown from '../components/Countdown';
 import Leaderboard from '../components/Leaderboard';
 import AnimatedLeaderboard from '../components/AnimatedLeaderboard';
 import SoundToggle from '../components/SoundToggle';
+import BackgroundMusic from '../components/BackgroundMusic';
 import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
 import AvatarBadge from '../components/AvatarBadge';
@@ -27,6 +28,7 @@ export default function HostGame() {
   return (
     <>
       <SoundToggle />
+      <BackgroundMusic />
       {view}
     </>
   );

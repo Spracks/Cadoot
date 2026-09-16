@@ -30,7 +30,7 @@ export function setSoundEnabled(on: boolean): void {
   if (on) ensureCtx(); // resume within the click gesture that enabled it
 }
 
-function ensureCtx(): AudioContext | null {
+export function ensureCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   const AC =
     window.AudioContext ??
