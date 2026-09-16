@@ -41,6 +41,7 @@ function HostLobby() {
   const quizTitle = useStore((s) => s.quizTitle);
   const players = useStore((s) => s.players);
   const startGame = useStore((s) => s.startGame);
+  const cancelGame = useStore((s) => s.cancelGame);
   const [urls, setUrls] = useState<string[]>([]);
   const [pinned, setPinned] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -104,13 +105,31 @@ function HostLobby() {
           <h2>
             {players.length} {players.length === 1 ? 'player' : 'players'} joined
           </h2>
-          <button
-            className="btn primary"
-            onClick={startGame}
-            disabled={players.length === 0}
-          >
-            Start game
-          </button>
+          <div className="lobby-actions">
+            <button
+              className="btn ghost"
+              onClick={() => {
+                const n = players.length;
+                if (
+                  n === 0 ||
+                  window.confirm(
+                    `${n} ${n === 1 ? 'player has' : 'players have'} joined. Cancel this game?`,
+                  )
+                ) {
+                  cancelGame();
+                }
+              }}
+            >
+              Cancel game
+            </button>
+            <button
+              className="btn primary"
+              onClick={startGame}
+              disabled={players.length === 0}
+            >
+              Start game
+            </button>
+          </div>
         </div>
         <ul className="player-chips">
           {players.map((p) => (

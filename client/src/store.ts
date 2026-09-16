@@ -55,6 +55,8 @@ interface State {
   nextQuestion: () => void;
   skipQuestion: () => void;
   endGame: () => void;
+  /** Close the hosted game for good and return to the start screen. */
+  cancelGame: () => void;
   join: (pin: string, nickname: string, avatar: string) => Promise<void>;
   answer: (optionIndex: number) => void;
   clearError: () => void;
@@ -313,6 +315,18 @@ export const useStore = create<State>((set, get) => {
     nextQuestion: () => socket.emit('host:nextQuestion'),
     skipQuestion: () => socket.emit('host:skipQuestion'),
     endGame: () => socket.emit('host:endGame'),
+    cancelGame: () => {
+      // Wait for the server to close the game before reloading, but don't get
+      // stuck if it's unreachable: the local session is cleared either way.
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        get().reset();
+      };
+      socket.emit('host:cancelGame', finish);
+      setTimeout(finish, 1500);
+    },
 
     join: (pin, nickname, avatar) =>
       new Promise<void>((resolve, reject) => {

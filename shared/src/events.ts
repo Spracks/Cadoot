@@ -228,6 +228,8 @@ export interface ClientToServerEvents {
   'host:nextQuestion': () => void;
   'host:skipQuestion': () => void;
   'host:endGame': () => void;
+  /** Close the game outright (no results) so it can't be rejoined. */
+  'host:cancelGame': (ack: () => void) => void;
   /** Reclaim a game after a host-page reload, using the stored host token. */
   'host:rejoin': (
     data: { pin: string; hostToken: string },

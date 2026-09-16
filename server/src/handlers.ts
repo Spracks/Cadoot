@@ -475,6 +475,25 @@ export function registerHandlers(io: IoServer): GameManager {
       gameOver(game);
     });
 
+    socket.on('host:cancelGame', (ack) => {
+      const game = manager.getByHost(socket.id);
+      if (game) {
+        clearTimers(game);
+        if (game.hostGraceTimer) {
+          clearTimeout(game.hostGraceTimer);
+          game.hostGraceTimer = null;
+        }
+        // Everyone but the host; "ended" makes the players' banner offer a
+        // way back to the start screen.
+        socket.to(game.pin).emit('game:error', {
+          message: 'The host ended this game.',
+        });
+        io.socketsLeave(game.pin);
+        manager.remove(game.pin);
+      }
+      if (typeof ack === 'function') ack();
+    });
+
     socket.on('player:join', ({ pin, nickname, avatar }, ack) => {
       const game = manager.get(pin);
       if (!game) {

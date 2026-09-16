@@ -391,6 +391,11 @@ body {
 .lobby-players-head h2 {
   margin: 0;
 }
+.lobby-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .player-chips {
   list-style: none;
   padding: 0;
