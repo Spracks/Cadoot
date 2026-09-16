@@ -6,6 +6,7 @@ import Countdown, { LOW_TIME_MS } from '../components/Countdown';
 import Leaderboard from '../components/Leaderboard';
 import AnimatedLeaderboard from '../components/AnimatedLeaderboard';
 import SoundToggle from '../components/SoundToggle';
+import FullscreenToggle from '../components/FullscreenToggle';
 import BackgroundMusic from '../components/BackgroundMusic';
 import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
@@ -27,6 +28,7 @@ export default function HostGame() {
   else view = <HostLobby />;
   return (
     <>
+      <FullscreenToggle />
       <SoundToggle />
       <BackgroundMusic />
       {view}

@@ -822,6 +822,13 @@ body {
   box-shadow: var(--shadow);
   line-height: 1;
 }
+/* Sits just left of the sound toggle, sharing its look. */
+.fullscreen-toggle {
+  right: 64px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+}
 
 /* ---------- Builder: question type toggle ---------- */
 .builder-type {
