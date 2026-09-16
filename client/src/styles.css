@@ -325,8 +325,11 @@ body {
   line-height: 1;
 }
 .join-url {
-  margin-top: 8px;
-  opacity: 0.9;
+  margin-top: 12px;
+  font-size: clamp(1.3rem, 3.2vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .addr-picker {
   margin-top: 10px;
