@@ -1,13 +1,29 @@
 import { useState } from 'react';
-import type { Quiz } from '@cadoot/shared';
-import { tileStyle } from '../theme';
+import {
+  MAX_PUZZLE_PAIRS,
+  MIN_PUZZLE_PAIRS,
+  isChoice,
+  type Quiz,
+  type QuestionType,
+} from '@cadoot/shared';
+import { answerStyle, tileStyle } from '../theme';
 import { downloadFile, slug } from '../results';
 import {
+  MAX_DRAFT_ANSWERS,
   draftToQuiz,
   emptyDraft,
   emptyDraftQuestion,
+  emptyPair,
   type DraftQuestion,
 } from '../quizDraft';
+
+const TYPES: Array<{ type: QuestionType; label: string }> = [
+  { type: 'multiple', label: 'Multiple choice' },
+  { type: 'boolean', label: 'True / False' },
+  { type: 'fill', label: 'Fill in the blank' },
+  { type: 'open', label: 'Open-ended' },
+  { type: 'puzzle', label: 'Puzzle' },
+];
 
 export default function QuizBuilder({
   onSubmit,
@@ -102,29 +118,41 @@ export default function QuizBuilder({
           />
 
           <div className="builder-type" role="group" aria-label="Question type">
-            <button
-              type="button"
-              className={q.type === 'multiple' ? 'active' : ''}
-              onClick={() => update(i, { type: 'multiple' })}
-            >
-              Multiple choice
-            </button>
-            <button
-              type="button"
-              className={q.type === 'boolean' ? 'active' : ''}
-              onClick={() =>
-                update(i, {
-                  type: 'boolean',
-                  correctIndex: q.correctIndex === 1 ? 1 : 0,
-                })
-              }
-            >
-              True / False
-            </button>
+            {TYPES.map((t) => (
+              <button
+                key={t.type}
+                type="button"
+                className={q.type === t.type ? 'active' : ''}
+                aria-pressed={q.type === t.type}
+                onClick={() =>
+                  update(i, {
+                    type: t.type,
+                    ...(t.type === 'boolean'
+                      ? { correctIndex: q.correctIndex === 1 ? 1 : 0 }
+                      : {}),
+                  })
+                }
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
-          <p className="muted small">Tap the circle to mark the correct answer.</p>
-          {q.type === 'boolean'
+          {q.type === 'fill' ? (
+            <FillEditor q={q} onChange={(patch) => update(i, patch)} />
+          ) : q.type === 'open' ? (
+            <p className="muted small">
+              Players type anything they like. Open-ended questions aren’t
+              scored — everyone’s answers appear on the shared screen, without
+              names.
+            </p>
+          ) : q.type === 'puzzle' ? (
+            <PuzzleEditor q={q} onChange={(patch) => update(i, patch)} />
+          ) : (
+            <p className="muted small">Tap the circle to mark the correct answer.</p>
+          )}
+          {isChoice(q) &&
+            (q.type === 'boolean'
             ? ['True', 'False'].map((label, oi) => {
                 const st = tileStyle(oi, 'boolean');
                 return (
@@ -173,7 +201,7 @@ export default function QuizBuilder({
                     />
                   </div>
                 );
-              })}
+              }))}
 
           <label className="builder-time">
             Time limit (seconds)
@@ -229,5 +257,128 @@ export default function QuizBuilder({
         </button>
       </div>
     </div>
+  );
+}
+
+/** Accepted answers for a fill-in-the-blank question. */
+function FillEditor({
+  q,
+  onChange,
+}: {
+  q: DraftQuestion;
+  onChange: (patch: Partial<DraftQuestion>) => void;
+}) {
+  const setAnswer = (ai: number, value: string) =>
+    onChange({ answers: q.answers.map((a, j) => (j === ai ? value : a)) });
+  return (
+    <>
+      <p className="muted small">
+        Put <code>___</code> in the question where the blank goes. Any answer
+        below counts as correct — capitals, extra spaces and a final full stop
+        don’t matter.
+      </p>
+      {q.answers.map((a, ai) => (
+        <div className="builder-option" key={ai}>
+          <span className="builder-shape" style={{ color: 'var(--good)' }} aria-hidden="true">
+            ✓
+          </span>
+          <input
+            type="text"
+            value={a}
+            placeholder={ai === 0 ? 'Correct answer' : 'Another accepted answer'}
+            aria-label={`Accepted answer ${ai + 1}`}
+            onChange={(e) => setAnswer(ai, e.target.value)}
+          />
+          {q.answers.length > 1 && (
+            <button
+              type="button"
+              className="link-btn danger builder-remove"
+              aria-label={`Remove accepted answer ${ai + 1}`}
+              onClick={() => onChange({ answers: q.answers.filter((_, j) => j !== ai) })}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+      {q.answers.length < MAX_DRAFT_ANSWERS && (
+        <button
+          type="button"
+          className="link-btn builder-add"
+          onClick={() => onChange({ answers: [...q.answers, ''] })}
+        >
+          + Accept another spelling
+        </button>
+      )}
+    </>
+  );
+}
+
+/** Item / match pairs for a puzzle question. */
+function PuzzleEditor({
+  q,
+  onChange,
+}: {
+  q: DraftQuestion;
+  onChange: (patch: Partial<DraftQuestion>) => void;
+}) {
+  const setPair = (pi: number, side: 'left' | 'right', value: string) =>
+    onChange({
+      pairs: q.pairs.map((p, j) => (j === pi ? { ...p, [side]: value } : p)),
+    });
+  return (
+    <>
+      <p className="muted small">
+        Write each item next to its match. Players see the matches shuffled and
+        drag them back into line; each pair they get right earns part of the
+        points.
+      </p>
+      {q.pairs.map((p, pi) => {
+        const st = answerStyle(pi);
+        return (
+          <div className="builder-option builder-pair" key={pi}>
+            <span className="builder-shape" style={{ color: st.color }} aria-hidden="true">
+              {st.shape}
+            </span>
+            <input
+              type="text"
+              value={p.left}
+              placeholder={`Item ${pi + 1}`}
+              aria-label={`Item ${pi + 1}`}
+              onChange={(e) => setPair(pi, 'left', e.target.value)}
+            />
+            <span className="builder-pair-link" aria-hidden="true">
+              ⟷
+            </span>
+            <input
+              type="text"
+              value={p.right}
+              placeholder="Its match"
+              aria-label={`Match for item ${pi + 1}`}
+              onChange={(e) => setPair(pi, 'right', e.target.value)}
+            />
+            {q.pairs.length > MIN_PUZZLE_PAIRS && (
+              <button
+                type="button"
+                className="link-btn danger builder-remove"
+                aria-label={`Remove pair ${pi + 1}`}
+                onClick={() => onChange({ pairs: q.pairs.filter((_, j) => j !== pi) })}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {q.pairs.length < MAX_PUZZLE_PAIRS && (
+        <button
+          type="button"
+          className="link-btn builder-add"
+          onClick={() => onChange({ pairs: [...q.pairs, emptyPair()] })}
+        >
+          + Add pair
+        </button>
+      )}
+    </>
   );
 }

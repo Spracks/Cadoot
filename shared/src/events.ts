@@ -1,8 +1,8 @@
-import type { Quiz, QuestionType } from './quiz';
+import type { ChoiceType, PuzzlePair, Quiz, QuestionType } from './quiz';
 
 /**
  * The version of a question that is safe to send to players. Crucially it does
- * NOT contain `correctIndex` — clients never learn the answer until reveal.
+ * NOT contain the answer key — clients never learn the answer until reveal.
  */
 export interface PublicQuestion {
   /** 0-based position in the quiz. */
@@ -10,9 +10,66 @@ export interface PublicQuestion {
   total: number;
   text: string;
   type: QuestionType;
+  /**
+   * Choice questions: the tiles. Puzzles: the right-hand items, shuffled so
+   * none starts beside its partner. Empty for typed-answer questions.
+   */
   options: string[];
+  /** Puzzles only: the left-hand items, in authored order. */
+  prompts?: string[];
   timeLimitSec: number;
 }
+
+/**
+ * What a player sends for each question type:
+ * - choice:  the option tile they tapped
+ * - fill / open: what they typed
+ * - puzzle:  for each prompt (in order), the index into the shown `options`
+ *            they placed beside it — a permutation of 0..n-1
+ */
+export type AnswerPayload =
+  | { optionIndex: number }
+  | { text: string }
+  | { order: number[] };
+
+/** Typed answers grouped by their normalized form, most common first. */
+export interface ResponseTally {
+  /** The most common spelling seen for this group. */
+  text: string;
+  count: number;
+  /** Fill-in-the-blank only: whether this response was accepted. */
+  correct?: boolean;
+}
+
+/**
+ * The answer key plus how the class answered, per question type. Shown at
+ * reveal and repeated in the host's post-game report.
+ */
+export type QuestionOutcome =
+  | {
+      type: ChoiceType;
+      options: string[];
+      correctIndex: number;
+      /** Answers received per option index. */
+      distribution: AnswerDistribution;
+    }
+  | { type: 'fill'; answers: string[]; responses: ResponseTally[] }
+  | { type: 'open'; responses: ResponseTally[] }
+  | {
+      type: 'puzzle';
+      pairs: PuzzlePair[];
+      /** For each pair, how many players matched it correctly. */
+      pairCorrect: number[];
+    };
+
+/** Everything the shared screen shows when a question is revealed. */
+export type RevealData = QuestionOutcome & {
+  /** Players who got the question fully right (0 for open-ended). */
+  correctCount: number;
+  leaderboard: LeaderboardEntry[];
+  /** Ceiling a flawless player could hold by now; scales the host's bars. */
+  maxPossible: number;
+};
 
 export interface PlayerSummary {
   id: string;
@@ -52,29 +109,51 @@ export interface PersonalResult {
   streak: number;
   /** Portion of pointsEarned that came from the streak bonus. */
   streakBonus: number;
+  /** Puzzles only: how many pairs this player matched correctly. */
+  matched?: { count: number; total: number };
 }
 
 /** Count of answers received per option index. */
 export type AnswerDistribution = number[];
 
 /**
+ * The answer key for one question and the answer one player gave, per type.
+ * Every "their answer" field is null when the player never answered.
+ */
+export type ReviewDetail =
+  | {
+      type: ChoiceType;
+      options: string[];
+      correctIndex: number;
+      answerIndex: number | null;
+    }
+  | { type: 'fill'; answers: string[]; answerText: string | null }
+  | { type: 'open'; answerText: string | null }
+  | {
+      type: 'puzzle';
+      pairs: PuzzlePair[];
+      /**
+       * For each pair (in order), the index of the pair whose `right` this
+       * player placed beside it. A perfect answer is [0, 1, 2, …].
+       */
+      answerOrder: number[] | null;
+    };
+
+/**
  * One question as it appeared to a single player, with the answer they gave.
  *
- * This is the ONE place a player's device is sent `correctIndex` — the game is
+ * This is the ONE place a player's device is sent the answer key — the game is
  * over and every question here has already been revealed on the shared screen,
  * so nothing is leaked that the player hasn't already seen.
  */
-export interface ReviewAnswer {
+export type ReviewAnswer = ReviewDetail & {
   /** 0-based position in the quiz. */
   questionIndex: number;
   text: string;
-  options: string[];
-  correctIndex: number;
-  /** Which option this player picked, or null if they never answered. */
-  answerIndex: number | null;
+  answered: boolean;
   correct: boolean;
   pointsEarned: number;
-}
+};
 
 /**
  * A player's own post-game review — everything their downloadable study sheet
@@ -89,24 +168,22 @@ export interface PersonalReview {
   totalPlayers: number;
   score: number;
   correctCount: number;
+  /** How many of `answers` were graded (open-ended questions aren't). */
+  gradedCount: number;
   /** One entry per question that was actually scored, in play order. */
   answers: ReviewAnswer[];
 }
 
 /** How the class as a whole did on one question. */
-export interface QuestionStat {
+export type QuestionStat = QuestionOutcome & {
   questionIndex: number;
   text: string;
-  options: string[];
-  correctIndex: number;
-  /** Answers received per option index. */
-  distribution: AnswerDistribution;
   correctCount: number;
   /** Players who never answered this question. */
   noAnswerCount: number;
-  /** Share of all players who got it right, 0–1. */
+  /** Share of all players who got it right, 0–1 (0 for open-ended). */
   accuracy: number;
-}
+};
 
 /** One row of the host's final standings. */
 export interface StandingsRow {
@@ -139,13 +216,7 @@ export interface StateSync {
   remainingMs: number;
   /** Whether this player already answered the current question. */
   answered: boolean;
-  reveal: {
-    correctIndex: number;
-    distribution: AnswerDistribution;
-    leaderboard: LeaderboardEntry[];
-    /** Ceiling a flawless player could hold by now; scales the host's bars. */
-    maxPossible: number;
-  } | null;
+  reveal: RevealData | null;
   myResult: PersonalResult | null;
   finalLeaderboard: LeaderboardEntry[] | null;
   /** Downloadable post-game review; only present once the game is over. */
@@ -166,13 +237,7 @@ export interface HostStateSync {
   answeredCount: number;
   question: PublicQuestion | null;
   remainingMs: number;
-  reveal: {
-    correctIndex: number;
-    distribution: AnswerDistribution;
-    leaderboard: LeaderboardEntry[];
-    /** Ceiling a flawless player could hold by now; scales the host's bars. */
-    maxPossible: number;
-  } | null;
+  reveal: RevealData | null;
   finalLeaderboard: LeaderboardEntry[] | null;
   /** Downloadable class report; only present once the game is over. */
   report: HostReport | null;
@@ -199,13 +264,7 @@ export interface ServerToClientEvents {
   'question:tick': (data: { remainingMs: number }) => void;
   /** Live count of how many connected players have answered this question. */
   'question:answered': (data: { answered: number; total: number }) => void;
-  'question:results': (data: {
-    correctIndex: number;
-    distribution: AnswerDistribution;
-    leaderboard: LeaderboardEntry[];
-    /** Ceiling a flawless player could hold by now; scales the host's bars. */
-    maxPossible: number;
-  }) => void;
+  'question:results': (data: RevealData) => void;
   /** Personal per-player result, sent only to that player at reveal. */
   'answer:result': (data: PersonalResult) => void;
   'game:over': (data: { leaderboard: LeaderboardEntry[] }) => void;
@@ -247,5 +306,5 @@ export interface ClientToServerEvents {
         | { ok: false; error: string },
     ) => void,
   ) => void;
-  'player:answer': (data: { optionIndex: number }) => void;
+  'player:answer': (data: AnswerPayload) => void;
 }

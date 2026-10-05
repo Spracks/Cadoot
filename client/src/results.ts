@@ -1,4 +1,10 @@
-import type { HostReport, PersonalReview, QuestionStat } from '@cadoot/shared';
+import type {
+  HostReport,
+  PersonalReview,
+  PuzzlePair,
+  QuestionStat,
+  ReviewAnswer,
+} from '@cadoot/shared';
 
 /**
  * Turns a finished game into files you can keep: a printable HTML sheet and a
@@ -258,42 +264,116 @@ save it as a PDF to keep it.
  * Student study sheet
  * ------------------------------------------------------------------ */
 
+/** One row of a study-sheet answer list. `text` must already be HTML. */
+function optRow(classes: string[], letter: string, text: string, tags: string[]): string {
+  return `      <li class="${['opt', ...classes].join(' ')}">
+        <span class="letter">${letter}</span>
+        <span class="text">${text}</span>
+        ${tags.length ? `<span class="tag">${tags.join(' · ')}</span>` : ''}
+      </li>`;
+}
+
+/** How many pairs of a puzzle a player matched. */
+function puzzleMatched(order: number[] | null): number {
+  return order ? order.filter((p, i) => p === i).length : 0;
+}
+
+/** The answer list under one study-sheet question: the key and their answer. */
+function reviewRows(a: ReviewAnswer): string {
+  switch (a.type) {
+    case 'multiple':
+    case 'boolean':
+      return a.options
+        .map((opt, i) => {
+          const isCorrect = i === a.correctIndex;
+          const isMine = i === a.answerIndex;
+          return optRow(
+            [...(isCorrect ? ['is-correct'] : []), ...(isMine ? ['is-mine'] : [])],
+            LETTERS[i] ?? String(i + 1),
+            inlineHtml(opt),
+            [...(isCorrect ? ['correct answer'] : []), ...(isMine ? ['your answer'] : [])],
+          );
+        })
+        .join('\n');
+    case 'fill': {
+      // Typed by the student, so plain-escaped rather than treated as markup.
+      const mine =
+        a.answerText === null
+          ? []
+          : [
+              optRow(
+                a.correct ? ['is-correct', 'is-mine'] : ['is-mine'],
+                '✎',
+                esc(a.answerText),
+                a.correct ? ['your answer · correct'] : ['your answer'],
+              ),
+            ];
+      const key = a.correct
+        ? []
+        : [
+            optRow(
+              ['is-correct'],
+              '✓',
+              a.answers.map(inlineHtml).join(' / '),
+              [a.answers.length > 1 ? 'accepted answers' : 'correct answer'],
+            ),
+          ];
+      return [...mine, ...key].join('\n');
+    }
+    case 'open':
+      return a.answerText === null
+        ? ''
+        : optRow([], '✎', esc(a.answerText), ['your answer']);
+    case 'puzzle':
+      return a.pairs
+        .map((pair, i) => {
+          const left = inlineHtml(pair.left);
+          if (!a.answerOrder) {
+            return optRow(['is-correct'], String(i + 1), `${left} → ${inlineHtml(pair.right)}`, [
+              'correct match',
+            ]);
+          }
+          const placed = a.answerOrder[i]!;
+          const ok = placed === i;
+          return optRow(
+            ok ? ['is-correct', 'is-mine'] : ['is-mine'],
+            String(i + 1),
+            `${left} → ${inlineHtml(a.pairs[placed]?.right ?? '')}`,
+            ok ? ['✓ matched'] : [`should be ${inlineHtml(pair.right)}`],
+          );
+        })
+        .join('\n');
+  }
+}
+
+/** The one-line verdict beside each study-sheet question. */
+function verdict(a: ReviewAnswer): string {
+  if (a.type === 'open') return a.answered ? '✎ Open-ended' : '✗ No answer';
+  if (a.correct) return '✓ Correct';
+  if (!a.answered) return '✗ No answer';
+  if (a.type === 'puzzle') {
+    return `✗ ${puzzleMatched(a.answerOrder)} of ${a.pairs.length} matched`;
+  }
+  return '✗ Incorrect';
+}
+
 export function studySheetHtml(review: PersonalReview): string {
-  const total = review.answers.length;
   const heading = `${review.quizTitle} — ${review.nickname}`;
 
   const questions = review.answers
     .map((a) => {
-      const answered = a.answerIndex !== null;
-      const options = a.options
-        .map((opt, i) => {
-          const isCorrect = i === a.correctIndex;
-          const isMine = i === a.answerIndex;
-          const classes = ['opt'];
-          if (isCorrect) classes.push('is-correct');
-          if (isMine) classes.push('is-mine');
-          const tags: string[] = [];
-          if (isCorrect) tags.push('correct answer');
-          if (isMine) tags.push('your answer');
-          return `      <li class="${classes.join(' ')}">
-        <span class="letter">${LETTERS[i] ?? i + 1}</span>
-        <span class="text">${inlineHtml(opt)}</span>
-        ${tags.length ? `<span class="tag">${tags.join(' · ')}</span>` : ''}
-      </li>`;
-        })
-        .join('\n');
-
-      return `  <li class="q ${a.correct ? 'correct' : 'wrong'}">
+      const tone = a.type === 'open' ? 'open' : a.correct ? 'correct' : 'wrong';
+      return `  <li class="q ${tone}">
     <div class="q-head">
       <span class="q-num">Q${a.questionIndex + 1}</span>
-      <span class="verdict">${a.correct ? '✓ Correct' : answered ? '✗ Incorrect' : '✗ No answer'}</span>
-      <span class="pts">+${a.pointsEarned} pts</span>
+      <span class="verdict">${verdict(a)}</span>
+      <span class="pts">${a.type === 'open' ? 'not scored' : `+${a.pointsEarned} pts`}</span>
     </div>
     <div class="q-text">${questionHtml(a.text)}</div>
     <ul class="options">
-${options}
+${reviewRows(a)}
     </ul>
-${!answered ? '    <p class="missed">You ran out of time on this one.</p>' : ''}
+${!a.answered ? '    <p class="missed">You ran out of time on this one.</p>' : ''}
   </li>`;
     })
     .join('\n');
@@ -305,7 +385,7 @@ ${!answered ? '    <p class="missed">You ran out of time on this one.</p>' : ''}
   <h1>${esc(review.quizTitle)}</h1>
   <p class="meta">
     <strong>${esc(review.nickname)}</strong> ·
-    <strong>${review.correctCount} of ${total}</strong> correct ·
+    <strong>${review.correctCount} of ${review.gradedCount}</strong> correct ·
     ${review.score} pts ·
     rank ${review.rank} of ${review.totalPlayers} ·
     ${esc(formatDate(review.finishedAt))}
@@ -327,18 +407,54 @@ export function studySheetCsv(review: PersonalReview): string {
       'result',
       'points_earned',
     ]),
-    ...review.answers.map((a) =>
-      csvRow([
+    ...review.answers.map((a) => {
+      const [yours, key] = reviewCells(a);
+      return csvRow([
         a.questionIndex + 1,
         oneLine(a.text),
-        a.answerIndex === null ? '' : oneLine(a.options[a.answerIndex] ?? ''),
-        oneLine(a.options[a.correctIndex] ?? ''),
-        outcome(a.correct, a.answerIndex !== null),
+        oneLine(yours),
+        oneLine(key),
+        reviewOutcome(a),
         a.pointsEarned,
-      ]),
-    ),
+      ]);
+    }),
   ];
   return BOM + rows.join('\r\n') + '\r\n';
+}
+
+/** Puzzle pairs as one cell: "HTTP → 80; SSH → 22". */
+function pairsCell(pairs: PuzzlePair[], order?: number[]): string {
+  return pairs
+    .map((p, i) => `${p.left} → ${pairs[order ? order[i]! : i]?.right ?? ''}`)
+    .join('; ');
+}
+
+/** A study-sheet CSV row's "your answer" and "correct answer" cells. */
+function reviewCells(a: ReviewAnswer): [string, string] {
+  switch (a.type) {
+    case 'multiple':
+    case 'boolean':
+      return [
+        a.answerIndex === null ? '' : (a.options[a.answerIndex] ?? ''),
+        a.options[a.correctIndex] ?? '',
+      ];
+    case 'fill':
+      return [a.answerText ?? '', a.answers.join(' / ')];
+    case 'open':
+      return [a.answerText ?? '', ''];
+    case 'puzzle':
+      return [a.answerOrder ? pairsCell(a.pairs, a.answerOrder) : '', pairsCell(a.pairs)];
+  }
+}
+
+/** The study-sheet CSV `result` column. */
+function reviewOutcome(a: ReviewAnswer): string {
+  if (a.type === 'open') return a.answered ? 'not scored' : 'no answer';
+  if (a.type === 'puzzle' && a.answered && !a.correct) {
+    const matched = puzzleMatched(a.answerOrder);
+    if (matched > 0) return `partly correct (${matched}/${a.pairs.length})`;
+  }
+  return outcome(a.correct, a.answered);
 }
 
 /* ------------------------------------------------------------------ *
@@ -347,6 +463,52 @@ export function studySheetCsv(review: PersonalReview): string {
 
 function accuracyPercent(q: QuestionStat): number {
   return Math.round(q.accuracy * 100);
+}
+
+/** Typed responses the report lists per question; the rest are summed up. */
+const REPORT_RESPONSES = 8;
+
+/** How the class split on one graded question, one HTML line per answer. */
+function statBreakdown(q: QuestionStat): string[] {
+  switch (q.type) {
+    case 'multiple':
+    case 'boolean':
+      return q.options.map((opt, i) => {
+        const count = q.distribution[i] ?? 0;
+        const mark = i === q.correctIndex ? ' ✓' : '';
+        return `${LETTERS[i] ?? i + 1}. ${esc(opt)}${mark} — ${count}`;
+      });
+    case 'fill': {
+      const shown = q.responses.slice(0, REPORT_RESPONSES);
+      const others = q.responses.slice(REPORT_RESPONSES).reduce((n, r) => n + r.count, 0);
+      return [
+        `Accepted: ${q.answers.map(esc).join(' / ')}`,
+        ...shown.map((r) => `“${esc(r.text)}”${r.correct ? ' ✓' : ''} — ${r.count}`),
+        ...(others > 0 ? [`Other answers — ${others}`] : []),
+      ];
+    }
+    case 'puzzle':
+      return q.pairs.map(
+        (p, i) => `${esc(p.left)} → ${esc(p.right)} — ${q.pairCorrect[i] ?? 0} matched`,
+      );
+    case 'open':
+      return [];
+  }
+}
+
+/** A question's answer key as one spreadsheet cell. */
+function keyCell(q: QuestionStat): string {
+  switch (q.type) {
+    case 'multiple':
+    case 'boolean':
+      return q.options[q.correctIndex] ?? '';
+    case 'fill':
+      return q.answers.join(' / ');
+    case 'puzzle':
+      return pairsCell(q.pairs);
+    case 'open':
+      return '';
+  }
 }
 
 export function classReportHtml(report: HostReport): string {
@@ -362,19 +524,18 @@ export function classReportHtml(report: HostReport): string {
     .join('\n');
 
   // Weakest questions first — the point of the report is spotting what to
-  // reteach, not replaying the game in order.
-  const byAccuracy = [...report.questions].sort((a, b) => a.accuracy - b.accuracy);
+  // reteach, not replaying the game in order. Open-ended questions have no
+  // accuracy, so their responses get a section of their own.
+  const byAccuracy = report.questions
+    .filter((q) => q.type !== 'open')
+    .sort((a, b) => a.accuracy - b.accuracy);
+  const openQuestions = report.questions.filter((q) => q.type === 'open');
 
   const questions = byAccuracy
     .map((q) => {
       const pct = accuracyPercent(q);
       const band = pct < 50 ? 'low' : pct < 75 ? 'mid' : '';
-      const breakdown = q.options
-        .map((opt, i) => {
-          const count = q.distribution[i] ?? 0;
-          const mark = i === q.correctIndex ? ' ✓' : '';
-          return `${LETTERS[i] ?? i + 1}. ${esc(opt)}${mark} — ${count}`;
-        })
+      const breakdown = statBreakdown(q)
         .concat(q.noAnswerCount > 0 ? [`No answer — ${q.noAnswerCount}`] : [])
         .join('<br>');
       return `    <tr>
@@ -393,6 +554,35 @@ export function classReportHtml(report: HostReport): string {
     </tr>`;
     })
     .join('\n');
+
+  const openSection = openQuestions.length
+    ? `
+
+<h2>Open-ended responses</h2>
+<table>
+  <thead>
+    <tr><th class="num">#</th><th>Question</th><th class="num">Answered</th></tr>
+  </thead>
+  <tbody>
+${openQuestions
+  .map((q) => {
+    const responses =
+      'responses' in q && q.responses.length
+        ? q.responses.map((r) => `${esc(r.text)} — ${r.count}`).join('<br>')
+        : 'No responses';
+    return `    <tr>
+      <td class="num">${q.questionIndex + 1}</td>
+      <td>
+        <strong>${esc(oneLine(q.text))}</strong><br>
+        <span style="color:var(--muted);font-size:.85rem">${responses}</span>
+      </td>
+      <td class="num">${report.playerCount - q.noAnswerCount}/${report.playerCount}</td>
+    </tr>`;
+  })
+  .join('\n')}
+  </tbody>
+</table>`
+    : '';
 
   return page(
     `${report.quizTitle} — class report`,
@@ -414,7 +604,7 @@ export function classReportHtml(report: HostReport): string {
   <tbody>
 ${questions}
   </tbody>
-</table>
+</table>${openSection}
 
 <h2>Final standings</h2>
 <table>
@@ -434,9 +624,10 @@ ${standings}
  * downloads.
  */
 export function classReportCsv(report: HostReport): string {
+  const graded = report.questions.filter((q) => q.type !== 'open');
   const optionColumns = Math.max(
     0,
-    ...report.questions.map((q) => q.options.length),
+    ...graded.map((q) => ('options' in q ? q.options.length : 0)),
   );
 
   const standings = [
@@ -461,23 +652,37 @@ export function classReportCsv(report: HostReport): string {
         (l) => `option_${l.toLowerCase()}_count`,
       ),
     ]),
-    ...report.questions.map((q) => {
-      const answered = q.distribution.reduce((sum, n) => sum + n, 0);
+    ...graded.map((q) => {
+      const answered = report.playerCount - q.noAnswerCount;
       return csvRow([
         q.questionIndex + 1,
         oneLine(q.text),
-        oneLine(q.options[q.correctIndex] ?? ''),
+        oneLine(keyCell(q)),
         q.correctCount,
         answered - q.correctCount,
         q.noAnswerCount,
         accuracyPercent(q),
-        ...Array.from(
-          { length: optionColumns },
-          (_, i) => q.distribution[i] ?? 0,
+        // Per-option counts only mean something for choice questions.
+        ...Array.from({ length: optionColumns }, (_, i) =>
+          'distribution' in q ? (q.distribution[i] ?? 0) : '',
         ),
       ]);
     }),
   ];
 
-  return BOM + [...standings, '', ...questions].join('\r\n') + '\r\n';
+  const open = report.questions.filter((q) => q.type === 'open');
+  const responses = open.length
+    ? [
+        '',
+        csvRow(['Open-ended responses']),
+        csvRow(['question_number', 'question', 'response', 'count']),
+        ...open.flatMap((q) =>
+          ('responses' in q ? q.responses : []).map((r) =>
+            csvRow([q.questionIndex + 1, oneLine(q.text), oneLine(r.text), r.count]),
+          ),
+        ),
+      ]
+    : [];
+
+  return BOM + [...standings, '', ...questions, ...responses].join('\r\n') + '\r\n';
 }

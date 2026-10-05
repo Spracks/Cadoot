@@ -44,5 +44,27 @@ export const SAMPLE_QUIZ: Quiz = {
       correctIndex: 1,
       timeLimitSec: 20,
     },
+    {
+      text: 'In Python, a function is defined with the keyword ___.',
+      type: 'fill',
+      answers: ['def'],
+      timeLimitSec: 20,
+    },
+    {
+      text: 'Match each protocol to its default port.',
+      type: 'puzzle',
+      pairs: [
+        { left: 'HTTP', right: '80' },
+        { left: 'HTTPS', right: '443' },
+        { left: 'SSH', right: '22' },
+        { left: 'DNS', right: '53' },
+      ],
+      timeLimitSec: 40,
+    },
+    {
+      text: 'In one word: what should we learn about next?',
+      type: 'open',
+      timeLimitSec: 30,
+    },
   ],
 };

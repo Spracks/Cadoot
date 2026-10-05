@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type {
+  AnswerPayload,
   HostReport,
   LeaderboardEntry,
   PersonalResult,
@@ -7,6 +8,7 @@ import type {
   PlayerSummary,
   PublicQuestion,
   Quiz,
+  RevealData,
 } from '@cadoot/shared';
 import { socket } from './socket';
 import { initSoundFromStorage, setSoundEnabled } from './sound';
@@ -14,14 +16,6 @@ import { DEFAULT_AVATAR } from './avatars';
 
 export type Role = 'none' | 'host' | 'player';
 export type ServerPhase = 'lobby' | 'question' | 'reveal' | 'over';
-
-interface RevealData {
-  correctIndex: number;
-  distribution: number[];
-  leaderboard: LeaderboardEntry[];
-  /** Ceiling a flawless player could hold by now; scales the host's bars. */
-  maxPossible: number;
-}
 
 interface State {
   role: Role;
@@ -58,7 +52,7 @@ interface State {
   /** Close the hosted game for good and return to the start screen. */
   cancelGame: () => void;
   join: (pin: string, nickname: string, avatar: string) => Promise<void>;
-  answer: (optionIndex: number) => void;
+  answer: (answer: AnswerPayload) => void;
   clearError: () => void;
   reset: () => void;
 }
@@ -349,9 +343,9 @@ export const useStore = create<State>((set, get) => {
         });
       }),
 
-    answer: (optionIndex) => {
+    answer: (answer) => {
       if (get().hasAnswered) return;
-      socket.emit('player:answer', { optionIndex });
+      socket.emit('player:answer', answer);
       set({ hasAnswered: true });
     },
 

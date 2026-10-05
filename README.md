@@ -51,11 +51,31 @@ In dev, open the client at `http://localhost:5173`.
    them for reuse).
 2. Students open the join URL, enter the **PIN** and a **nickname**.
 3. The host clicks **Start**. Each question shows on the shared screen with a timer.
-4. Students tap a colored answer on their device. **Faster correct answers score more.**
-5. After each question: the correct answer, the answer distribution, and the leaderboard.
+4. Students answer on their device. **Faster correct answers score more.** Questions
+   can be multiple choice, true / false, fill-in-the-blank (type the missing word),
+   open-ended (unscored; answers shown to the class) or a puzzle (drag the matches
+   into line, with partial credit).
+5. After each question: the correct answer, how the class answered (votes per
+   option, everyone's typed answers, or how many matched each puzzle pair), and the
+   leaderboard.
 6. At the end: a top-3 podium and final standings — plus a **download** on every
    screen, so the results outlive the game (see [Taking the results with
    you](#-taking-the-results-with-you)).
+
+### Scoring
+
+- A correct answer is worth **1000 points**. The first 5 seconds are reading time
+  and always earn the full amount; after that the value drops steadily, reaching
+  **500** at the buzzer.
+- **Streaks:** each correct answer in a row after the first adds a **+100** bonus
+  (+100, +200, … capped at +500). A wrong answer resets the
+  streak.
+- **Puzzles** give partial credit: matching 3 of 4 pairs earns 3/4 of the points.
+  Only a perfect match counts as correct and keeps a streak going.
+- **Open-ended** questions aren't scored, and answering (or skipping) one never
+  affects a streak.
+- Answer times are measured on the server, so a tampered-with device can't claim
+  to have answered faster than it did.
 
 **Dropped connections are handled.** If a student's phone sleeps or briefly loses
 Wi-Fi, their browser automatically rejoins the same game and keeps their score — no
@@ -172,6 +192,9 @@ supported (details and examples in [`quizzes/README.md`](quizzes/README.md)):
 
 - **JSON** — `correctIndex` is 0-based.
 - **CSV** — author in any spreadsheet; the `correct` column is 1-based.
+
+Both formats cover all five question types: multiple choice, true / false,
+fill-in-the-blank, open-ended and puzzle.
 
 Validate a file before class:
 

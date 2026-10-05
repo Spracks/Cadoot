@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { QuizSchema, type Quiz } from './quiz';
+import { QuizSchema, type Quiz, type QuestionType } from './quiz';
 import { z } from 'zod';
 
 export type ParseResult =
@@ -31,14 +31,42 @@ export function parseQuizJson(text: string): ParseResult {
   return { ok: true, quiz: result.data };
 }
 
+const TYPE_ALIASES: Record<string, QuestionType> = {
+  multiple: 'multiple',
+  mc: 'multiple',
+  boolean: 'boolean',
+  tf: 'boolean',
+  truefalse: 'boolean',
+  'true/false': 'boolean',
+  'true-false': 'boolean',
+  fill: 'fill',
+  blank: 'fill',
+  fillblank: 'fill',
+  'fill-in': 'fill',
+  'fill-in-the-blank': 'fill',
+  open: 'open',
+  openended: 'open',
+  'open-ended': 'open',
+  puzzle: 'puzzle',
+  match: 'puzzle',
+  matching: 'puzzle',
+};
+
+/** Spreadsheet columns that can hold options, answers or puzzle pairs. */
+const OPTION_COLUMNS = ['option1', 'option2', 'option3', 'option4', 'option5', 'option6'];
+
 /**
  * Parse and validate a quiz from CSV text.
  *
  * Expected columns (header row required):
- *   question, option1, option2, option3, option4, correct, timeLimitSec
+ *   question, type, option1 … option6, correct, timeLimitSec
  *
- * - `correct` is 1-based (the human-friendly option number, 1-4).
- * - option3/option4 and timeLimitSec are optional.
+ * - `type` is optional; blank means multiple choice. See TYPE_ALIASES.
+ * - `correct` is 1-based (the human-friendly option number, 1-4), or
+ *   true/false for a true/false question. Other types ignore it.
+ * - Fill-in-the-blank: every filled option cell is an accepted answer.
+ * - Puzzle: each filled option cell is one `left | right` pair.
+ * - Options past option2, `type` and `timeLimitSec` are optional.
  * - The quiz title defaults to `titleFallback` (typically the file name).
  */
 export function parseQuizCsv(
@@ -66,11 +94,17 @@ export function parseQuizCsv(
     const timeRaw = (row.timelimitsec ?? '').trim();
     const timeLimitSec = timeRaw ? Number(timeRaw) : 20;
 
-    // Optional "type" column: boolean / tf / true-false makes a True/False question.
     const typeRaw = (row.type ?? '').trim().toLowerCase();
-    const isBoolean = ['boolean', 'tf', 'truefalse', 'true/false', 'true-false'].includes(typeRaw);
+    const type: QuestionType = TYPE_ALIASES[typeRaw] ?? 'multiple';
+    if (typeRaw && !TYPE_ALIASES[typeRaw]) {
+      errors.push(`Row ${rowNum}: unknown question type "${row.type}"`);
+    }
 
-    if (isBoolean) {
+    const options = OPTION_COLUMNS.map((c) => (row[c] ?? '').trim()).filter(
+      (o) => o.length > 0,
+    );
+
+    if (type === 'boolean') {
       const c = (row.correct ?? '').trim().toLowerCase();
       let correct: boolean | undefined;
       if (['true', 't', 'yes', 'y', '1'].includes(c)) correct = true;
@@ -79,9 +113,19 @@ export function parseQuizCsv(
       return { type: 'boolean', text, correct, timeLimitSec };
     }
 
-    const options = [row.option1, row.option2, row.option3, row.option4]
-      .map((o) => (o ?? '').trim())
-      .filter((o) => o.length > 0);
+    if (type === 'fill') return { type, text, answers: options, timeLimitSec };
+    if (type === 'open') return { type, text, timeLimitSec };
+    if (type === 'puzzle') {
+      const pairs = options.map((cell) => {
+        const bar = cell.indexOf('|');
+        if (bar === -1) {
+          errors.push(`Row ${rowNum}: puzzle pairs are written "item | match" — "${cell}" has no "|"`);
+          return { left: cell, right: '' };
+        }
+        return { left: cell.slice(0, bar).trim(), right: cell.slice(bar + 1).trim() };
+      });
+      return { type, text, pairs, timeLimitSec };
+    }
 
     const correctRaw = (row.correct ?? '').trim();
     const correct1Based = Number(correctRaw);

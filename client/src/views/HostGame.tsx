@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useStore } from '../store';
+import type { RevealData } from '@cadoot/shared';
 import AnswerTiles from '../components/AnswerTiles';
+import PuzzleBoard from '../components/PuzzleBoard';
+import {
+  AcceptedAnswers,
+  PuzzleKey,
+  ResponseCloud,
+} from '../components/RevealPanels';
 import Countdown, { LOW_TIME_MS } from '../components/Countdown';
 import Leaderboard from '../components/Leaderboard';
 import AnimatedLeaderboard from '../components/AnimatedLeaderboard';
@@ -174,11 +181,21 @@ function HostQuestion() {
         <div className="q-text q-enter">
           <RichText text={q.text} />
         </div>
-        <AnswerTiles
-          options={q.options}
-          big
-          variant={q.type === 'boolean' ? 'boolean' : 'multiple'}
-        />
+        {q.type === 'fill' || q.type === 'open' ? (
+          <p className="type-prompt">
+            {q.type === 'fill'
+              ? '✏️ Fill in the blank on your device'
+              : '✏️ Type your answer on your device'}
+          </p>
+        ) : q.type === 'puzzle' ? (
+          <PuzzleBoard prompts={q.prompts ?? []} options={q.options} big />
+        ) : (
+          <AnswerTiles
+            options={q.options}
+            big
+            variant={q.type === 'boolean' ? 'boolean' : 'multiple'}
+          />
+        )}
       </div>
       <div className="host-controls">
         {progress && (
@@ -209,13 +226,7 @@ function HostReveal() {
       <div className="q-text">
         <RichText text={q.text} />
       </div>
-      <AnswerTiles
-        options={q.options}
-        correctIndex={reveal.correctIndex}
-        distribution={reveal.distribution}
-        big
-        variant={q.type === 'boolean' ? 'boolean' : 'multiple'}
-      />
+      <RevealAnswer reveal={reveal} />
       <div className="reveal-lb">
         <h2>Leaderboard</h2>
         <AnimatedLeaderboard
@@ -237,6 +248,49 @@ function HostReveal() {
       </div>
     </div>
   );
+}
+
+/** The answer key and how the class answered, in the form each type needs. */
+function RevealAnswer({ reveal }: { reveal: RevealData }) {
+  const playerCount = useStore((s) => s.players.length);
+  switch (reveal.type) {
+    case 'multiple':
+    case 'boolean':
+      return (
+        <AnswerTiles
+          options={reveal.options}
+          correctIndex={reveal.correctIndex}
+          distribution={reveal.distribution}
+          big
+          variant={reveal.type}
+        />
+      );
+    case 'fill':
+      return (
+        <div className="reveal-typed">
+          <AcceptedAnswers
+            answers={reveal.answers}
+            correctCount={reveal.correctCount}
+            playerCount={playerCount}
+          />
+          <ResponseCloud responses={reveal.responses} />
+        </div>
+      );
+    case 'open':
+      return (
+        <div className="reveal-typed">
+          <ResponseCloud responses={reveal.responses} />
+        </div>
+      );
+    case 'puzzle':
+      return (
+        <PuzzleKey
+          pairs={reveal.pairs}
+          pairCorrect={reveal.pairCorrect}
+          playerCount={playerCount}
+        />
+      );
+  }
 }
 
 function HostOver() {

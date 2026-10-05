@@ -4,3 +4,6 @@ question,type,option1,option2,option3,option4,correct,timeLimitSec
 "How many bits are in a byte?",,"4","8","16","32",2,15
 "Base of the hexadecimal system?",,"2","8","10","16",4,15
 "A byte can represent 256 distinct values.",boolean,,,,,true,15
+"Hexadecimal digit for the value 15?",fill,"F",,,,,15
+"Match each unit to its size.",puzzle,"Bit | 1 binary digit","Nibble | 4 bits","Byte | 8 bits",,,30
+"Which topic should we review next?",open,,,,,,30

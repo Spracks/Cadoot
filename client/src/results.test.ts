@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { HostReport, PersonalReview } from '@cadoot/shared';
+import type {
+  ChoiceType,
+  HostReport,
+  PersonalReview,
+  QuestionStat,
+  ReviewAnswer,
+} from '@cadoot/shared';
 import {
   classReportCsv,
   classReportHtml,
@@ -10,6 +16,21 @@ import {
   studySheetName,
 } from './results';
 
+type ChoiceReview = Extract<ReviewAnswer, { type: ChoiceType }>;
+
+/** Q1 of the review: answered, and right. */
+const FIRST: ChoiceReview = {
+  type: 'multiple',
+  questionIndex: 0,
+  text: 'Which organelle makes ATP?',
+  options: ['Ribosome', 'Mitochondrion', 'Golgi body', 'Nucleus'],
+  correctIndex: 1,
+  answerIndex: 1,
+  answered: true,
+  correct: true,
+  pointsEarned: 1000,
+};
+
 const REVIEW: PersonalReview = {
   quizTitle: 'Cell Biology',
   finishedAt: Date.UTC(2026, 7, 6, 15, 30),
@@ -18,31 +39,28 @@ const REVIEW: PersonalReview = {
   totalPlayers: 3,
   score: 1400,
   correctCount: 1,
+  gradedCount: 3,
   answers: [
+    FIRST,
     {
-      questionIndex: 0,
-      text: 'Which organelle makes ATP?',
-      options: ['Ribosome', 'Mitochondrion', 'Golgi body', 'Nucleus'],
-      correctIndex: 1,
-      answerIndex: 1,
-      correct: true,
-      pointsEarned: 1000,
-    },
-    {
+      type: 'multiple',
       questionIndex: 1,
       text: 'DNA replication is…',
       options: ['Conservative', 'Semi-conservative'],
       correctIndex: 1,
       answerIndex: 0,
+      answered: true,
       correct: false,
       pointsEarned: 0,
     },
     {
+      type: 'multiple',
       questionIndex: 2,
       text: 'Enzymes are made of…',
       options: ['Lipid', 'Protein'],
       correctIndex: 1,
       answerIndex: null,
+      answered: false,
       correct: false,
       pointsEarned: 0,
     },
@@ -59,6 +77,7 @@ const REPORT: HostReport = {
   ],
   questions: [
     {
+      type: 'multiple',
       questionIndex: 0,
       text: 'Which organelle makes ATP?',
       options: ['Ribosome', 'Mitochondrion', 'Golgi body', 'Nucleus'],
@@ -69,6 +88,7 @@ const REPORT: HostReport = {
       accuracy: 0.75,
     },
     {
+      type: 'multiple',
       questionIndex: 1,
       text: 'DNA replication is…',
       options: ['Conservative', 'Semi-conservative'],
@@ -109,7 +129,7 @@ describe('study sheet', () => {
       ...REVIEW,
       nickname: '<img src=x onerror=alert(1)>',
       answers: [
-        { ...REVIEW.answers[0]!, text: 'Is 1 < 2 & 3 > 2?', options: ['<b>yes</b>', 'no'] },
+        { ...FIRST, text: 'Is 1 < 2 & 3 > 2?', options: ['<b>yes</b>', 'no'] },
       ],
     });
     expect(html).not.toContain('<img src=x');
@@ -139,7 +159,7 @@ describe('study sheet', () => {
       ...REVIEW,
       answers: [
         {
-          ...REVIEW.answers[0]!,
+          ...FIRST,
           text: '=cmd|calc',
           options: ['He said "hi"', 'b'],
           correctIndex: 0,
@@ -156,7 +176,7 @@ describe('study sheet', () => {
       ...REVIEW,
       answers: [
         {
-          ...REVIEW.answers[0]!,
+          ...FIRST,
           text: 'What does this print?\n\n```python\nprint(len("cell"))\n```',
           options: ['Calls `len()`', 'b'],
         },
@@ -172,7 +192,7 @@ describe('study sheet', () => {
   it('collapses multi-line question text onto one CSV line', () => {
     const csv = studySheetCsv({
       ...REVIEW,
-      answers: [{ ...REVIEW.answers[0]!, text: 'What does\nthis print?' }],
+      answers: [{ ...FIRST, text: 'What does\nthis print?' }],
     });
     expect(csv).toContain('"What does this print?"');
     expect(csv.trim().split('\r\n')).toHaveLength(2);
@@ -183,7 +203,7 @@ describe('study sheet', () => {
       ...REVIEW,
       answers: [
         {
-          ...REVIEW.answers[0]!,
+          ...FIRST,
           text: 'Output?\n\n```python\nprint(1)\n```',
           options: ['`1`', 'b'],
           correctIndex: 0,
@@ -236,6 +256,140 @@ describe('class report', () => {
     expect(lines[8]).toBe(
       '2,"DNA replication is…","Semi-conservative",1,2,1,25,2,1,0,0',
     );
+  });
+});
+
+describe('fill-in-the-blank, open-ended and puzzle questions', () => {
+  const PAIRS = [
+    { left: 'HTTP', right: '80' },
+    { left: 'HTTPS', right: '443' },
+    { left: 'SSH', right: '22' },
+  ];
+  const MIXED: PersonalReview = {
+    ...REVIEW,
+    correctCount: 0,
+    gradedCount: 2,
+    answers: [
+      {
+        type: 'fill',
+        questionIndex: 0,
+        text: 'Capital of France: ___',
+        answers: ['Paris', 'Paris, France'],
+        answerText: '<b>Lyon</b>',
+        answered: true,
+        correct: false,
+        pointsEarned: 0,
+      },
+      {
+        type: 'open',
+        questionIndex: 1,
+        text: 'One word for today?',
+        answerText: 'Fun',
+        answered: true,
+        correct: false,
+        pointsEarned: 0,
+      },
+      {
+        type: 'puzzle',
+        questionIndex: 2,
+        text: 'Match the ports',
+        pairs: PAIRS,
+        answerOrder: [0, 2, 1],
+        answered: true,
+        correct: false,
+        pointsEarned: 400,
+      },
+    ],
+  };
+
+  it('shows each type’s answer key next to what the student gave', () => {
+    const html = studySheetHtml(MIXED);
+    // Fill: their (escaped) answer, then everything that would have counted.
+    expect(html).toContain('&lt;b&gt;Lyon&lt;/b&gt;');
+    expect(html).not.toContain('<b>Lyon</b>');
+    expect(html).toContain('Paris / Paris, France');
+    expect(html).toContain('accepted answers');
+    // Open: their answer, marked as unscored rather than wrong.
+    expect(html).toContain('✎ Open-ended');
+    expect(html).toContain('not scored');
+    // Puzzle: partial credit, and the right match for each miss.
+    expect(html).toContain('✗ 1 of 3 matched');
+    expect(html).toContain('HTTPS → 22');
+    expect(html).toContain('should be 443');
+    // Only graded questions count toward the score line.
+    expect(html).toContain('0 of 2');
+  });
+
+  it('spells the new types out in the study-sheet CSV', () => {
+    const lines = studySheetCsv(MIXED).trim().split('\r\n');
+    expect(lines[1]).toBe('1,"Capital of France: ___","<b>Lyon</b>","Paris / Paris, France","wrong",0');
+    expect(lines[2]).toBe('2,"One word for today?","Fun","","not scored",0');
+    expect(lines[3]).toBe(
+      '3,"Match the ports","HTTP → 80; HTTPS → 22; SSH → 443","HTTP → 80; HTTPS → 443; SSH → 22","partly correct (1/3)",400',
+    );
+  });
+
+  const STATS: QuestionStat[] = [
+    {
+      type: 'fill',
+      questionIndex: 0,
+      text: 'Capital of France: ___',
+      answers: ['Paris'],
+      responses: [
+        { text: 'Paris', count: 2, correct: true },
+        { text: 'Lyon', count: 1, correct: false },
+      ],
+      correctCount: 2,
+      noAnswerCount: 1,
+      accuracy: 0.5,
+    },
+    {
+      type: 'open',
+      questionIndex: 1,
+      text: 'One word for today?',
+      responses: [{ text: 'Fun', count: 3 }],
+      correctCount: 0,
+      noAnswerCount: 1,
+      accuracy: 0,
+    },
+    {
+      type: 'puzzle',
+      questionIndex: 2,
+      text: 'Match the ports',
+      pairs: PAIRS,
+      pairCorrect: [4, 2, 2],
+      correctCount: 2,
+      noAnswerCount: 0,
+      accuracy: 0.5,
+    },
+  ];
+  const MIXED_REPORT: HostReport = { ...REPORT, questions: [...REPORT.questions, ...STATS] };
+
+  it('keeps open-ended questions out of the accuracy table', () => {
+    const html = classReportHtml(MIXED_REPORT);
+    const accuracy = html.slice(html.indexOf('Question accuracy'), html.indexOf('Open-ended responses'));
+    expect(accuracy).toContain('Accepted: Paris');
+    expect(accuracy).toContain('“Lyon” — 1');
+    expect(accuracy).toContain('HTTP → 80 — 4 matched');
+    expect(accuracy).not.toContain('One word for today?');
+    const open = html.slice(html.indexOf('Open-ended responses'), html.indexOf('Final standings'));
+    expect(open).toContain('One word for today?');
+    expect(open).toContain('Fun — 3');
+    expect(open).toContain('3/4');
+  });
+
+  it('adds the new types to the class-report CSV', () => {
+    const lines = classReportCsv(MIXED_REPORT).trim().split('\r\n');
+    // Fill and puzzle rows leave the per-option counts blank.
+    expect(lines).toContain('1,"Capital of France: ___","Paris",2,1,1,50,"","","",""');
+    expect(lines).toContain(
+      '3,"Match the ports","HTTP → 80; HTTPS → 443; SSH → 22",2,2,0,50,"","","",""',
+    );
+    // Open-ended answers get their own table at the end.
+    const open = lines.indexOf('"Open-ended responses"');
+    expect(open).toBeGreaterThan(0);
+    expect(lines[open + 1]).toBe('"question_number","question","response","count"');
+    expect(lines[open + 2]).toBe('2,"One word for today?","Fun",3');
   });
 });
 

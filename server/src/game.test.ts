@@ -416,4 +416,156 @@ describe('game flow (end-to-end over sockets)', () => {
       teardown();
     }
   }, 15000);
+
+  it('plays fill-in-the-blank, open-ended and puzzle questions', async () => {
+    const PAIRS = [
+      { left: 'HTTP', right: '80' },
+      { left: 'HTTPS', right: '443' },
+      { left: 'SSH', right: '22' },
+    ];
+    const MIXED: Quiz = {
+      title: 'Mixed',
+      questions: [
+        { type: 'multiple', text: 'Warm-up', options: ['a', 'b'], correctIndex: 0, timeLimitSec: 30 },
+        { type: 'fill', text: 'Capital of France: ___', answers: ['Paris'], timeLimitSec: 30 },
+        { type: 'open', text: 'One word for today?', timeLimitSec: 30 },
+        { type: 'puzzle', text: 'Match the ports', pairs: PAIRS, timeLimitSec: 30 },
+      ],
+    };
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    const bob = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz: MIXED });
+      const pin = created.pin as string;
+      await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+      await bob.emitWithAck('player:join', { pin, nickname: 'Bob' });
+
+      /** Show the next question, have both players answer, return the reveal. */
+      async function play(
+        start: 'host:startGame' | 'host:nextQuestion',
+        answers: (shown: any) => [unknown, unknown],
+      ) {
+        const shownP = once<any>(alice, 'question:show');
+        host.emit(start);
+        const shown = await shownP;
+        const [a, b] = answers(shown);
+        const revealP = once<any>(host, 'question:results');
+        const aliceP = once<any>(alice, 'answer:result');
+        const bobP = once<any>(bob, 'answer:result');
+        alice.emit('player:answer', a as never);
+        bob.emit('player:answer', b as never);
+        return { shown, reveal: await revealP, alice: await aliceP, bob: await bobP };
+      }
+
+      // Q1 (choice): both right, so both carry a streak of 1 into the rest.
+      await play('host:startGame', () => [{ optionIndex: 0 }, { optionIndex: 0 }]);
+
+      // Q2 (fill): matching is forgiving; the answer key stays off the question.
+      const fill = await play('host:nextQuestion', () => [{ text: ' paris. ' }, { text: 'Lyon' }]);
+      expect(fill.shown).not.toHaveProperty('answers');
+      expect(fill.shown.options).toEqual([]);
+      expect(fill.alice).toMatchObject({ correct: true, streak: 2 });
+      expect(fill.bob).toMatchObject({ correct: false, pointsEarned: 0, streak: 0 });
+      expect(fill.reveal).toMatchObject({ type: 'fill', answers: ['Paris'], correctCount: 1 });
+      expect(fill.reveal.responses).toHaveLength(2);
+
+      // Q3 (open): unscored, and it neither extends nor breaks a streak.
+      const open = await play('host:nextQuestion', () => [{ text: 'Fun' }, { text: 'fun!' }]);
+      expect(open.alice).toMatchObject({ correct: false, pointsEarned: 0, streak: 2 });
+      expect(open.reveal).toMatchObject({
+        type: 'open',
+        correctCount: 0,
+        responses: [{ text: 'Fun', count: 2 }],
+      });
+      // The score ceiling only counts graded questions, so Q3 adds nothing.
+      expect(open.reveal.maxPossible).toBe(fill.reveal.maxPossible);
+
+      // Q4 (puzzle): Alice matches everything, Bob gets one pair of three.
+      const puzzle = await play('host:nextQuestion', (shown) => {
+        const slotOf = (right: string) => (shown.options as string[]).indexOf(right);
+        const perfect = PAIRS.map((p) => slotOf(p.right));
+        // Swap the last two placements: only the first pair stays right.
+        const partial = [perfect[0], perfect[2], perfect[1]];
+        return [{ order: perfect }, { order: partial }];
+      });
+      // The shown matches are shuffled so none sits beside its partner.
+      expect(puzzle.shown).not.toHaveProperty('pairs');
+      expect(puzzle.shown.prompts).toEqual(['HTTP', 'HTTPS', 'SSH']);
+      (puzzle.shown.options as string[]).forEach((right, slot) =>
+        expect(right).not.toBe(PAIRS[slot]!.right),
+      );
+      expect(puzzle.alice).toMatchObject({ correct: true, matched: { count: 3, total: 3 } });
+      expect(puzzle.bob).toMatchObject({ correct: false, matched: { count: 1, total: 3 } });
+      expect(puzzle.bob.pointsEarned).toBeGreaterThan(0);
+      expect(puzzle.bob.pointsEarned).toBeLessThan(puzzle.alice.pointsEarned);
+      expect(puzzle.reveal).toMatchObject({ type: 'puzzle', correctCount: 1, pairCorrect: [2, 1, 1] });
+
+      // Post-game: the review and report carry each type's key and answers.
+      const reviewP = once<any>(bob, 'results:review');
+      const reportP = once<any>(host, 'results:report');
+      host.emit('host:nextQuestion');
+      const review = await reviewP;
+      const report = await reportP;
+      expect(review.gradedCount).toBe(3);
+      expect(review.answers[1]).toMatchObject({ type: 'fill', answerText: 'Lyon', correct: false });
+      expect(review.answers[2]).toMatchObject({ type: 'open', answerText: 'fun!' });
+      expect(review.answers[3]).toMatchObject({ type: 'puzzle', answerOrder: [0, 2, 1] });
+      expect(report.questions.map((q: any) => q.type)).toEqual(['multiple', 'fill', 'open', 'puzzle']);
+      expect(report.questions[3]).toMatchObject({ correctCount: 1, accuracy: 0.5 });
+    } finally {
+      host.close();
+      alice.close();
+      bob.close();
+      teardown();
+    }
+  }, 15000);
+
+  it('ignores answers that do not fit the question', async () => {
+    const quiz: Quiz = {
+      title: 'Strict',
+      questions: [
+        {
+          type: 'puzzle',
+          text: 'Match',
+          pairs: [
+            { left: 'a', right: '1' },
+            { left: 'b', right: '2' },
+          ],
+          timeLimitSec: 30,
+        },
+      ],
+    };
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz });
+      const pin = created.pin as string;
+      await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+      const shownP = once(alice, 'question:show');
+      const startProgressP = once(host, 'question:answered');
+      host.emit('host:startGame');
+      await shownP;
+      await startProgressP;
+
+      // None of these fit a puzzle, so none counts as Alice's answer...
+      const progress: unknown[] = [];
+      host.on('question:answered', (p) => progress.push(p));
+      alice.emit('player:answer', { optionIndex: 0 });
+      alice.emit('player:answer', { text: 'a=1' });
+      alice.emit('player:answer', { order: [0, 0] });
+      // ...and the first well-formed order is the one that locks in.
+      const resultP = once<any>(alice, 'answer:result');
+      alice.emit('player:answer', { order: [1, 0] });
+      const result = await resultP;
+      expect(progress).toEqual([{ answered: 1, total: 1 }]);
+      expect(result.matched).toEqual({ count: 2, total: 2 });
+    } finally {
+      host.close();
+      alice.close();
+      teardown();
+    }
+  }, 15000);
 });

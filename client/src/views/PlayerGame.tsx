@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useStore, getInitialPin } from '../store';
 import AnswerTiles from '../components/AnswerTiles';
+import PuzzleBoard from '../components/PuzzleBoard';
+import TextAnswer from '../components/TextAnswer';
 import Leaderboard, { RankDelta } from '../components/Leaderboard';
 import RichText from '../components/RichText';
 import Confetti from '../components/Confetti';
@@ -146,11 +148,29 @@ function PlayerQuestion() {
       <div className="q-text small q-enter">
         <RichText text={q.text} />
       </div>
-      <AnswerTiles
-        options={q.options}
-        onPick={answer}
-        variant={q.type === 'boolean' ? 'boolean' : 'multiple'}
-      />
+      {q.type === 'fill' ? (
+        <TextAnswer
+          placeholder="Type the missing word"
+          onSubmit={(text) => answer({ text })}
+        />
+      ) : q.type === 'open' ? (
+        <TextAnswer
+          placeholder="Type your answer"
+          onSubmit={(text) => answer({ text })}
+        />
+      ) : q.type === 'puzzle' ? (
+        <PuzzleBoard
+          prompts={q.prompts ?? []}
+          options={q.options}
+          onSubmit={(order) => answer({ order })}
+        />
+      ) : (
+        <AnswerTiles
+          options={q.options}
+          onPick={(optionIndex) => answer({ optionIndex })}
+          variant={q.type === 'boolean' ? 'boolean' : 'multiple'}
+        />
+      )}
     </div>
   );
 }
@@ -158,10 +178,24 @@ function PlayerQuestion() {
 function PlayerReveal() {
   const result = useStore((s) => s.myResult);
   const hasAnswered = useStore((s) => s.hasAnswered);
+  const type = useStore((s) => s.question?.type);
   if (!result) {
     return (
       <div className="screen center">
         <h2>{hasAnswered ? 'Checking…' : "Time's up!"}</h2>
+      </div>
+    );
+  }
+  // Open-ended answers can't be wrong, so no red screen and no "+0".
+  if (type === 'open') {
+    return (
+      <div className="screen center result">
+        <h1>{hasAnswered ? 'Thanks for sharing!' : "Time's up"}</h1>
+        <p className="result-note">Look at the shared screen to see what everyone said.</p>
+        <p className="muted rank-line">
+          Score {result.totalScore} · Rank #{result.rank}{' '}
+          <RankDelta delta={result.rankDelta} />
+        </p>
       </div>
     );
   }
@@ -174,6 +208,11 @@ function PlayerReveal() {
             ? 'Not quite'
             : "Time's up"}
       </h1>
+      {result.matched && hasAnswered && !result.correct && (
+        <p className="matched-line">
+          {result.matched.count} of {result.matched.total} matched
+        </p>
+      )}
       <p className="points">+{result.pointsEarned}</p>
       {result.streak >= 2 && (
         <p className="streak" aria-label={`${result.streak} in a row`}>

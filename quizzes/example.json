@@ -24,6 +24,28 @@
       "text": "A subnet mask of /24 leaves 256 usable host addresses.",
       "correct": false,
       "timeLimitSec": 20
+    },
+    {
+      "type": "fill",
+      "text": "A ___ forwards packets between different networks.",
+      "answers": ["router", "a router"],
+      "timeLimitSec": 20
+    },
+    {
+      "type": "puzzle",
+      "text": "Match each protocol to its default port.",
+      "pairs": [
+        { "left": "HTTP", "right": "80" },
+        { "left": "HTTPS", "right": "443" },
+        { "left": "SSH", "right": "22" },
+        { "left": "DNS", "right": "53" }
+      ],
+      "timeLimitSec": 40
+    },
+    {
+      "type": "open",
+      "text": "What part of networking would you like to explore next?",
+      "timeLimitSec": 30
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Quiz } from '@cadoot/shared';
+import type { AnswerPayload, Quiz } from '@cadoot/shared';
 
 /**
  * What one player did on one scored question. Appended at reveal so the
@@ -8,8 +8,8 @@ import type { Quiz } from '@cadoot/shared';
  */
 export interface AnswerRecord {
   questionIndex: number;
-  /** Option picked, or null if they ran out of time. */
-  answerIndex: number | null;
+  /** What they answered (see `acceptAnswer`), or null if they ran out of time. */
+  answer: AnswerPayload | null;
   correct: boolean;
   points: number;
 }
@@ -22,9 +22,12 @@ export interface Player {
   connected: boolean;
   score: number;
   answered: boolean;
-  answerIndex: number | null;
+  /** This question's answer, as accepted by `acceptAnswer`. */
+  answer: AnswerPayload | null;
   lastCorrect: boolean;
   lastPoints: number;
+  /** Puzzles only: how many pairs this question's answer matched. */
+  lastMatched: number;
   /** Running count of consecutive correct answers (0 after a wrong answer). */
   streak: number;
   /** Streak-bonus portion of the most recent question's points. */
@@ -59,6 +62,12 @@ export interface Game {
   /** Epoch ms the game ended, so post-game downloads carry a stable date. */
   finishedAt: number | null;
   questionStartedAt: number | null;
+  /**
+   * Puzzles only: the order the current question's right-hand items are shown
+   * in (`shuffle[slot]` = pair index). Kept so a reconnecting player sees the
+   * same layout, and so answers can be mapped back to pairs.
+   */
+  shuffle: number[] | null;
   questionTimer: ReturnType<typeof setTimeout> | null;
   tickTimer: ReturnType<typeof setInterval> | null;
 }
@@ -84,6 +93,7 @@ export class GameManager {
       questionsScored: 0,
       finishedAt: null,
       questionStartedAt: null,
+      shuffle: null,
       questionTimer: null,
       tickTimer: null,
     };

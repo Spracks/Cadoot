@@ -5,12 +5,22 @@ import {
   computeScore,
   streakBonus,
   maxPossibleScore,
+  acceptAnswer,
+  gradeAnswer,
+  buildOutcome,
+  isGraded,
+  puzzleShuffle,
   DEFAULT_SCORE_CONFIG,
+  type AnswerPayload,
   type ClientToServerEvents,
   type ServerToClientEvents,
   type PlayerSummary,
   type LeaderboardEntry,
   type PublicQuestion,
+  type PersonalResult,
+  type Question,
+  type RevealData,
+  type ReviewDetail,
   type StateSync,
   type HostStateSync,
   type PersonalReview,
@@ -47,16 +57,34 @@ export function registerHandlers(io: IoServer): GameManager {
     };
   }
 
+  /** The current question minus its answer key. */
   function publicQuestion(game: Game, index: number): PublicQuestion {
     const q = game.quiz.questions[index]!;
-    return {
+    const base = {
       index,
       total: game.quiz.questions.length,
       text: q.text,
       type: q.type,
-      options: q.options,
       timeLimitSec: q.timeLimitSec,
     };
+    switch (q.type) {
+      case 'multiple':
+      case 'boolean':
+        return { ...base, options: q.options };
+      case 'fill':
+      case 'open':
+        return { ...base, options: [] };
+      case 'puzzle': {
+        // Sending the right-hand items in authored order would hand over the
+        // answer, so they always go out in the shuffled order.
+        const shuffle = game.shuffle ?? q.pairs.map((_, i) => i);
+        return {
+          ...base,
+          prompts: q.pairs.map((p) => p.left),
+          options: shuffle.map((i) => q.pairs[i]!.right),
+        };
+      }
+    }
   }
 
   function remainingMs(game: Game): number {
@@ -65,14 +93,34 @@ export function registerHandlers(io: IoServer): GameManager {
     return Math.max(0, q.timeLimitSec * 1000 - (Date.now() - game.questionStartedAt));
   }
 
-  function distributionFor(game: Game, optionCount: number): number[] {
-    const dist = new Array<number>(optionCount).fill(0);
-    for (const p of game.players.values()) {
-      if (p.answerIndex !== null && p.answerIndex < dist.length) {
-        dist[p.answerIndex] = (dist[p.answerIndex] ?? 0) + 1;
-      }
-    }
-    return dist;
+  /** What the shared screen shows when the current question is revealed. */
+  function revealData(game: Game, question: Question): RevealData {
+    const players = [...game.players.values()];
+    return {
+      ...buildOutcome(
+        question,
+        players.map((p) => p.answer),
+      ),
+      correctCount: players.filter((p) => p.lastCorrect).length,
+      leaderboard: leaderboard(game),
+      maxPossible: maxPossible(game),
+    };
+  }
+
+  function personalResult(game: Game, player: Player, rank: number): PersonalResult {
+    const q = game.quiz.questions[game.currentIndex];
+    return {
+      correct: player.lastCorrect,
+      pointsEarned: player.lastPoints,
+      totalScore: player.score,
+      rank,
+      rankDelta: player.lastRankDelta,
+      streak: player.streak,
+      streakBonus: player.lastStreakBonus,
+      ...(q?.type === 'puzzle'
+        ? { matched: { count: player.lastMatched, total: q.pairs.length } }
+        : {}),
+    };
   }
 
   /** Build a full state snapshot for one (re)connecting player. */
@@ -98,21 +146,8 @@ export function registerHandlers(io: IoServer): GameManager {
         question: publicQuestion(game, game.currentIndex),
         remainingMs: 0,
         answered: player.answered,
-        reveal: {
-          correctIndex: q.correctIndex,
-          distribution: distributionFor(game, q.options.length),
-          leaderboard: leaderboard(game),
-          maxPossible: maxPossible(game),
-        },
-        myResult: {
-          correct: player.lastCorrect,
-          pointsEarned: player.lastPoints,
-          totalScore: player.score,
-          rank,
-          rankDelta: player.lastRankDelta,
-          streak: player.streak,
-          streakBonus: player.lastStreakBonus,
-        },
+        reveal: revealData(game, q),
+        myResult: personalResult(game, player, rank),
         finalLeaderboard: null,
         review: null,
       };
@@ -151,7 +186,8 @@ export function registerHandlers(io: IoServer): GameManager {
    * than on the client so it stays correct if scoring rules ever change.
    */
   function maxPossible(game: Game): number {
-    return maxPossibleScore(game.currentIndex + 1);
+    const asked = game.quiz.questions.slice(0, game.currentIndex + 1);
+    return maxPossibleScore(asked.filter(isGraded).length);
   }
 
   function leaderboard(game: Game): LeaderboardEntry[] {
@@ -182,19 +218,52 @@ export function registerHandlers(io: IoServer): GameManager {
       totalPlayers: game.players.size,
       score: player.score,
       correctCount: player.history.filter((h) => h.correct).length,
+      gradedCount: player.history.filter((h) =>
+        isGraded(game.quiz.questions[h.questionIndex]!),
+      ).length,
       answers: player.history.map((h) => {
         const q = game.quiz.questions[h.questionIndex]!;
         return {
+          ...reviewDetail(q, h.answer),
           questionIndex: h.questionIndex,
           text: q.text,
-          options: q.options,
-          correctIndex: q.correctIndex,
-          answerIndex: h.answerIndex,
+          answered: h.answer !== null,
           correct: h.correct,
           pointsEarned: h.points,
         };
       }),
     };
+  }
+
+  /** One question's answer key next to what one player answered. */
+  function reviewDetail(
+    q: Question,
+    answer: AnswerPayload | null,
+  ): ReviewDetail {
+    switch (q.type) {
+      case 'multiple':
+      case 'boolean':
+        return {
+          type: q.type,
+          options: q.options,
+          correctIndex: q.correctIndex,
+          answerIndex: answer && 'optionIndex' in answer ? answer.optionIndex : null,
+        };
+      case 'fill':
+        return {
+          type: 'fill',
+          answers: q.answers,
+          answerText: answer && 'text' in answer ? answer.text : null,
+        };
+      case 'open':
+        return { type: 'open', answerText: answer && 'text' in answer ? answer.text : null };
+      case 'puzzle':
+        return {
+          type: 'puzzle',
+          pairs: q.pairs,
+          answerOrder: answer && 'order' in answer ? answer.order : null,
+        };
+    }
   }
 
   /**
@@ -207,30 +276,19 @@ export function registerHandlers(io: IoServer): GameManager {
     for (let i = 0; i < game.questionsScored; i++) {
       const q = game.quiz.questions[i];
       if (!q) continue;
-      const distribution = new Array<number>(q.options.length).fill(0);
-      let correctCount = 0;
-      let noAnswerCount = 0;
-      for (const p of players) {
-        // History is appended once per scored question, in order, for every
-        // player — nobody can join mid-game — so index i is question i.
-        const rec = p.history[i];
-        if (!rec || rec.answerIndex === null) {
-          noAnswerCount++;
-          continue;
-        }
-        if (rec.answerIndex < distribution.length) {
-          distribution[rec.answerIndex] = (distribution[rec.answerIndex] ?? 0) + 1;
-        }
-        if (rec.correct) correctCount++;
-      }
+      // History is appended once per scored question, in order, for every
+      // player — nobody can join mid-game — so index i is question i.
+      const records = players.map((p) => p.history[i]);
+      const correctCount = records.filter((rec) => rec?.correct).length;
       questions.push({
+        ...buildOutcome(
+          q,
+          records.map((rec) => rec?.answer ?? null),
+        ),
         questionIndex: i,
         text: q.text,
-        options: q.options,
-        correctIndex: q.correctIndex,
-        distribution,
         correctCount,
-        noAnswerCount,
+        noAnswerCount: records.filter((rec) => !rec?.answer).length,
         accuracy: players.length > 0 ? correctCount / players.length : 0,
       });
     }
@@ -274,12 +332,7 @@ export function registerHandlers(io: IoServer): GameManager {
         phase: 'reveal',
         question: publicQuestion(game, game.currentIndex),
         remainingMs: 0,
-        reveal: {
-          correctIndex: q.correctIndex,
-          distribution: distributionFor(game, q.options.length),
-          leaderboard: leaderboard(game),
-          maxPossible: maxPossible(game),
-        },
+        reveal: revealData(game, q),
         finalLeaderboard: null,
         report: null,
       };
@@ -325,11 +378,13 @@ export function registerHandlers(io: IoServer): GameManager {
     game.currentIndex = index;
     game.phase = 'question';
     game.questionStartedAt = Date.now();
+    game.shuffle = question.type === 'puzzle' ? puzzleShuffle(question.pairs.length) : null;
     for (const p of game.players.values()) {
       p.answered = false;
-      p.answerIndex = null;
+      p.answer = null;
       p.lastCorrect = false;
       p.lastPoints = 0;
+      p.lastMatched = 0;
     }
 
     io.to(game.pin).emit('question:show', publicQuestion(game, index));
@@ -362,13 +417,12 @@ export function registerHandlers(io: IoServer): GameManager {
       // overwrites the `last*` fields. Non-answerers are recorded too.
       p.history.push({
         questionIndex: game.currentIndex,
-        answerIndex: p.answered ? p.answerIndex : null,
+        answer: p.answered ? p.answer : null,
         correct: p.lastCorrect,
         points: p.lastPoints,
       });
     }
     game.questionsScored = game.currentIndex + 1;
-    const distribution = distributionFor(game, question.options.length);
 
     // Recompute standings, then record each player's rank movement vs the
     // previous reveal before overwriting their stored rank.
@@ -378,25 +432,11 @@ export function registerHandlers(io: IoServer): GameManager {
       p.lastRankDelta = p.rank == null ? null : p.rank - newRank;
       p.rank = newRank;
     });
-    const lb = leaderboard(game);
 
-    io.to(game.pin).emit('question:results', {
-      correctIndex: question.correctIndex,
-      distribution,
-      leaderboard: lb,
-      maxPossible: maxPossible(game),
-    });
+    io.to(game.pin).emit('question:results', revealData(game, question));
 
     for (const p of game.players.values()) {
-      io.to(p.socketId).emit('answer:result', {
-        correct: p.lastCorrect,
-        pointsEarned: p.lastPoints,
-        totalScore: p.score,
-        rank: p.rank ?? 0,
-        rankDelta: p.lastRankDelta,
-        streak: p.streak,
-        streakBonus: p.lastStreakBonus,
-      });
+      io.to(p.socketId).emit('answer:result', personalResult(game, p, p.rank ?? 0));
     }
   }
 
@@ -531,9 +571,10 @@ export function registerHandlers(io: IoServer): GameManager {
         connected: true,
         score: 0,
         answered: false,
-        answerIndex: null,
+        answer: null,
         lastCorrect: false,
         lastPoints: 0,
+        lastMatched: 0,
         streak: 0,
         lastStreakBonus: 0,
         rank: null,
@@ -565,7 +606,7 @@ export function registerHandlers(io: IoServer): GameManager {
       socket.emit('state:sync', buildSync(game, player));
     });
 
-    socket.on('player:answer', ({ optionIndex }) => {
+    socket.on('player:answer', (data) => {
       const found = manager.findPlayerBySocket(socket.id);
       if (!found) return;
       const { game, player } = found;
@@ -574,23 +615,35 @@ export function registerHandlers(io: IoServer): GameManager {
 
       const question = game.quiz.questions[game.currentIndex];
       if (!question) return;
-      if (optionIndex < 0 || optionIndex >= question.options.length) return;
+      const answer = acceptAnswer(question, data, game.shuffle);
+      if (!answer) return;
 
       player.answered = true;
-      player.answerIndex = optionIndex;
-      const timeUsed = Date.now() - (game.questionStartedAt ?? Date.now());
-      player.lastCorrect = optionIndex === question.correctIndex;
-      const base = computeScore(
-        player.lastCorrect,
-        timeUsed,
-        question.timeLimitSec * 1000,
-        DEFAULT_SCORE_CONFIG,
-      );
-      // A correct answer extends the streak (and earns its bonus); a wrong one
-      // breaks it. The streak carries across questions until broken.
-      player.streak = player.lastCorrect ? player.streak + 1 : 0;
-      player.lastStreakBonus = player.lastCorrect ? streakBonus(player.streak) : 0;
-      player.lastPoints = base + player.lastStreakBonus;
+      player.answer = answer;
+      if (isGraded(question)) {
+        const timeUsed = Date.now() - (game.questionStartedAt ?? Date.now());
+        // 0–1; only puzzles land in between, earning that share of the points.
+        const fraction = gradeAnswer(question, answer);
+        player.lastCorrect = fraction === 1;
+        if (question.type === 'puzzle') {
+          player.lastMatched = Math.round(fraction * question.pairs.length);
+        }
+        const base = Math.round(
+          computeScore(
+            fraction > 0,
+            timeUsed,
+            question.timeLimitSec * 1000,
+            DEFAULT_SCORE_CONFIG,
+          ) * fraction,
+        );
+        // A correct answer extends the streak (and earns its bonus); a wrong one
+        // breaks it. The streak carries across questions until broken.
+        player.streak = player.lastCorrect ? player.streak + 1 : 0;
+        player.lastStreakBonus = player.lastCorrect ? streakBonus(player.streak) : 0;
+        player.lastPoints = base + player.lastStreakBonus;
+      }
+      // An open-ended answer can't be wrong: it scores nothing and leaves the
+      // streak as it was.
 
       io.to(game.pin).emit('question:answered', answerProgress(game));
 

@@ -1,6 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { basename, isAbsolute, resolve } from 'node:path';
-import { parseQuizByFilename } from '@cadoot/shared';
+import { parseQuizByFilename, type Question } from '@cadoot/shared';
+
+/** One line summing up a question's answer, for a quick eyeball check. */
+function answerKey(q: Question): string {
+  switch (q.type) {
+    case 'multiple':
+    case 'boolean':
+      return `correct: "${q.options[q.correctIndex]}"`;
+    case 'fill':
+      return `accepts: ${q.answers.map((a) => `"${a}"`).join(', ')}`;
+    case 'open':
+      return 'open-ended (not scored)';
+    case 'puzzle':
+      return `pairs: ${q.pairs.map((p) => `"${p.left}" = "${p.right}"`).join(', ')}`;
+  }
+}
 
 /**
  * CLI: validate a quiz file before class.
@@ -35,10 +50,7 @@ function main(): void {
     console.log(`✅  "${quiz.title}" is valid.`);
     console.log(`    ${quiz.questions.length} question(s).`);
     quiz.questions.forEach((q, i) => {
-      const answer = q.options[q.correctIndex];
-      console.log(
-        `    ${i + 1}. ${q.text}  ->  correct: "${answer}" (${q.timeLimitSec}s)`,
-      );
+      console.log(`    ${i + 1}. ${q.text}  ->  ${answerKey(q)} (${q.timeLimitSec}s)`);
     });
     process.exit(0);
   } else {
