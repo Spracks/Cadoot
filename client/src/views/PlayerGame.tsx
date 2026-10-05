@@ -155,6 +155,7 @@ function PlayerQuestion() {
         />
       ) : q.type === 'open' ? (
         <TextAnswer
+          multiline
           placeholder="Type your answer"
           onSubmit={(text) => answer({ text })}
         />

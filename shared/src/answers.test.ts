@@ -90,7 +90,10 @@ describe('acceptAnswer', () => {
 
   it('trims and caps typed answers, and refuses blanks', () => {
     expect(acceptAnswer(FILL, { text: '  Paris ' }, null)).toEqual({ text: 'Paris' });
-    expect(acceptAnswer(OPEN, { text: 'x'.repeat(500) }, null)).toEqual({ text: 'x'.repeat(120) });
+    expect(acceptAnswer(FILL, { text: 'x'.repeat(500) }, null)).toEqual({ text: 'x'.repeat(120) });
+    // Open-ended answers get room for a few sentences, line breaks included.
+    expect(acceptAnswer(OPEN, { text: 'x'.repeat(900) }, null)).toEqual({ text: 'x'.repeat(500) });
+    expect(acceptAnswer(OPEN, { text: 'one\ntwo' }, null)).toEqual({ text: 'one\ntwo' });
     expect(acceptAnswer(FILL, { text: '   ' }, null)).toBeNull();
     expect(acceptAnswer(FILL, { text: 42 }, null)).toBeNull();
   });

@@ -90,9 +90,12 @@ alternatives yourself. Put `___` in the question text where the blank goes.
 
 ## Open-ended questions
 
-Players type anything. **Open-ended questions aren't scored** (and don't break a
-streak); at the reveal, everyone's answers appear on the shared screen, grouped
-and sized by how many people gave each one — without names.
+Players type anything, in a multi-line box with room for up to 500 characters (a
+few sentences). **Open-ended questions aren't scored** (and don't break a streak);
+at the reveal, everyone's answers appear on the shared screen without names —
+short answers grouped and sized by how many people gave each one, longer ones as
+cards. Give longer prompts a longer `timeLimitSec` so students have time to
+write.
 
 **JSON** — `{ "type": "open", "text": "What should we review next?" }`
 

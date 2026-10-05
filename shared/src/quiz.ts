@@ -6,8 +6,10 @@ export type ChoiceType = 'multiple' | 'boolean';
 
 /** A multiple-choice question offers between 2 and this many options. */
 export const MAX_OPTIONS = 8;
-/** Longest typed answer (fill-in-the-blank / open-ended) a player may send. */
+/** Longest fill-in-the-blank answer a player may send. */
 export const MAX_TEXT_ANSWER = 120;
+/** Longest open-ended answer a player may send — room for a few sentences. */
+export const MAX_OPEN_ANSWER = 500;
 /** Puzzle questions match between this many pairs, inclusive. */
 export const MIN_PUZZLE_PAIRS = 2;
 export const MAX_PUZZLE_PAIRS = 6;

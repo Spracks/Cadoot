@@ -950,9 +950,42 @@ body {
   box-shadow: var(--shadow);
   text-align: center;
 }
-.text-answer input:focus {
+.text-answer input:focus,
+.text-answer textarea:focus {
   outline: none;
   border-color: #ffd34e;
+}
+.text-answer.multiline {
+  max-width: 720px;
+  gap: 6px;
+}
+.text-answer textarea {
+  min-height: 12em;
+  /* Grows with the answer where supported (Chromium); elsewhere it scrolls. */
+  field-sizing: content;
+  max-height: 50vh;
+  padding: 14px 16px;
+  /* 16px+ keeps iOS from zooming the page when the box is focused. */
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  resize: vertical;
+}
+.text-answer-count {
+  align-self: flex-end;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.text-answer-count.full {
+  color: #ffd34e;
+  font-weight: 700;
+}
+.text-answer.multiline .btn {
+  margin-top: 6px;
 }
 .type-prompt {
   width: fit-content;
@@ -1164,6 +1197,23 @@ button.puzzle-card {
 }
 .response.bad {
   opacity: 0.8;
+}
+.response-text {
+  white-space: pre-wrap;
+}
+/* A sentence or more reads better as a card than as a word-cloud pill. */
+.response.long {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-radius: 14px;
+  padding: 14px 18px;
+  max-width: 640px;
+  /* Read from the back of the room, so not much smaller than the pills. */
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
 }
 .response-count {
   font-size: 0.7em;

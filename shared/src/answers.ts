@@ -1,4 +1,4 @@
-import { MAX_TEXT_ANSWER, type Question } from './quiz';
+import { MAX_OPEN_ANSWER, MAX_TEXT_ANSWER, type Question } from './quiz';
 import type { AnswerPayload, QuestionOutcome, ResponseTally } from './events';
 
 /** Most distinct typed responses a reveal or report lists. */
@@ -73,7 +73,8 @@ export function acceptAnswer(
     case 'fill':
     case 'open': {
       if (typeof a.text !== 'string') return null;
-      const text = a.text.trim().slice(0, MAX_TEXT_ANSWER);
+      const max = q.type === 'open' ? MAX_OPEN_ANSWER : MAX_TEXT_ANSWER;
+      const text = a.text.trim().slice(0, max);
       return text ? { text } : null;
     }
     case 'puzzle': {
