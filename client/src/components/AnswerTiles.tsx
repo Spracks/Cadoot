@@ -30,7 +30,13 @@ export default function AnswerTiles({
   const revealing = correctIndex !== null;
   return (
     <div
-      className={`answer-grid${big ? ' big' : ''}${variant === 'boolean' ? ' boolean' : ''}`}
+      className={
+        'answer-grid' +
+        (big ? ' big' : '') +
+        (variant === 'boolean' ? ' boolean' : '') +
+        // More than four tiles: tighter, so all of them fit on one screen.
+        (options.length > 4 ? ' many' : '')
+      }
     >
       {options.map((opt, i) => {
         const st = tileStyle(i, variant);

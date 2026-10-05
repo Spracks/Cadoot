@@ -82,6 +82,12 @@ describe('acceptAnswer', () => {
     expect(acceptAnswer(MC, null, null)).toBeNull();
   });
 
+  it('accepts the eighth option of an eight-option question', () => {
+    const eight: Question = { ...MC, options: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] };
+    expect(acceptAnswer(eight, { optionIndex: 7 }, null)).toEqual({ optionIndex: 7 });
+    expect(acceptAnswer(eight, { optionIndex: 8 }, null)).toBeNull();
+  });
+
   it('trims and caps typed answers, and refuses blanks', () => {
     expect(acceptAnswer(FILL, { text: '  Paris ' }, null)).toEqual({ text: 'Paris' });
     expect(acceptAnswer(OPEN, { text: 'x'.repeat(500) }, null)).toEqual({ text: 'x'.repeat(120) });

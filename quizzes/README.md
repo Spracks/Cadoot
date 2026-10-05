@@ -13,7 +13,8 @@ npm run validate-quiz -- quizzes/example.json
 ## JSON
 
 `correctIndex` is **0-based** (the first option is `0`). `timeLimitSec` is optional
-(defaults to 20). A question needs 2–4 options.
+(defaults to 20). A question needs 2–8 options; with more than four, the extra
+tiles get their own colors and shapes (★ ✚ ♥ ▼) and the tiles shrink to fit.
 
 ```json
 {
@@ -32,9 +33,10 @@ npm run validate-quiz -- quizzes/example.json
 ## CSV
 
 Author in any spreadsheet, then export as CSV. The header row is required. The
-`correct` column is **1-based** (the option *number*, 1–4) — friendlier for
-spreadsheets. `option3`, `option4`, and `timeLimitSec` are optional. The quiz
-title comes from the file name.
+`correct` column is **1-based** (the option *number*, 1–8) — friendlier for
+spreadsheets. `option3` through `option8` and `timeLimitSec` are optional (add
+only as many option columns as your widest question needs). The quiz title comes
+from the file name.
 
 ```csv
 question,option1,option2,option3,option4,correct,timeLimitSec
@@ -120,7 +122,7 @@ Give them a little longer than usual — 30–40 seconds is comfortable for 4 pa
 ```
 
 **CSV** — `type` is `puzzle`; each option column holds one pair written
-`item | match` (split at the first `|`). Up to six columns, `option1`–`option6`:
+`item | match` (split at the first `|`), one pair per column:
 
 ```csv
 question,type,option1,option2,option3,correct,timeLimitSec

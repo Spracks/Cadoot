@@ -52,7 +52,7 @@ In dev, open the client at `http://localhost:5173`.
 2. Students open the join URL, enter the **PIN** and a **nickname**.
 3. The host clicks **Start**. Each question shows on the shared screen with a timer.
 4. Students answer on their device. **Faster correct answers score more.** Questions
-   can be multiple choice, true / false, fill-in-the-blank (type the missing word),
+   can be multiple choice (2–8 options), true / false, fill-in-the-blank (type the missing word),
    open-ended (unscored; answers shown to the class) or a puzzle (drag the matches
    into line, with partial credit).
 5. After each question: the correct answer, how the class answered (votes per

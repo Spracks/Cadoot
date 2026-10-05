@@ -259,6 +259,45 @@ describe('class report', () => {
   });
 });
 
+describe('questions with more than four options', () => {
+  const EIGHT = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+  it('letters every option on the study sheet', () => {
+    const html = studySheetHtml({
+      ...REVIEW,
+      answers: [{ ...FIRST, options: EIGHT, correctIndex: 7, answerIndex: 6, correct: false }],
+    });
+    expect(html).toMatch(/<span class="letter">G<\/span>\s*<span class="text">g<\/span>/);
+    expect(html).toMatch(/<span class="letter">H<\/span>\s*<span class="text">h<\/span>/);
+  });
+
+  it('widens the class-report CSV to the most options in the quiz', () => {
+    const lines = classReportCsv({
+      ...REPORT,
+      questions: [
+        ...REPORT.questions,
+        {
+          type: 'multiple',
+          questionIndex: 2,
+          text: 'Eight-way',
+          options: EIGHT,
+          correctIndex: 7,
+          distribution: [0, 0, 0, 0, 0, 1, 0, 3],
+          correctCount: 3,
+          noAnswerCount: 0,
+          accuracy: 0.75,
+        },
+      ],
+    })
+      .trim()
+      .split('\r\n');
+    expect(lines[6]).toContain('"option_e_count","option_f_count","option_g_count","option_h_count"');
+    // Four-option questions pad the extra columns with zeroes.
+    expect(lines[7]).toBe('1,"Which organelle makes ATP?","Mitochondrion",3,1,0,75,1,3,0,0,0,0,0,0');
+    expect(lines[9]).toBe('3,"Eight-way","h",3,1,0,75,0,0,0,0,0,1,0,3');
+  });
+});
+
 describe('fill-in-the-blank, open-ended and puzzle questions', () => {
   const PAIRS = [
     { left: 'HTTP', right: '80' },

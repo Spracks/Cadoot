@@ -14,7 +14,7 @@ import {
 export interface DraftQuestion {
   text: string;
   type: QuestionType;
-  /** Multiple choice: 4 fixed option slots. */
+  /** Multiple choice: option slots, 4 to start and up to MAX_OPTIONS. */
   options: string[];
   /** For 'multiple': index into `options`. For 'boolean': 0 = True, 1 = False. */
   correctIndex: number;
@@ -30,6 +30,9 @@ export interface Draft {
   questions: DraftQuestion[];
 }
 
+/** Option slots a new multiple-choice question starts with. */
+export const DEFAULT_OPTION_SLOTS = 4;
+
 /** Most accepted-answer slots the builder offers for one blank. */
 export const MAX_DRAFT_ANSWERS = 5;
 
@@ -38,12 +41,22 @@ export const emptyPair = (): PuzzlePair => ({ left: '', right: '' });
 export const emptyDraftQuestion = (): DraftQuestion => ({
   text: '',
   type: 'multiple',
-  options: ['', '', '', ''],
+  options: Array.from({ length: DEFAULT_OPTION_SLOTS }, () => ''),
   correctIndex: 0,
   answers: [''],
   pairs: [emptyPair(), emptyPair(), emptyPair()],
   timeLimitSec: 20,
 });
+
+/**
+ * Drop one option slot, keeping the correct-answer mark on the same option.
+ * Removing the marked option itself moves the mark to the first slot.
+ */
+export function removeOption(q: DraftQuestion, index: number): DraftQuestion {
+  const correctIndex =
+    index === q.correctIndex ? 0 : q.correctIndex > index ? q.correctIndex - 1 : q.correctIndex;
+  return { ...q, options: q.options.filter((_, j) => j !== index), correctIndex };
+}
 
 export const emptyDraft = (): Draft => ({
   title: 'My Quiz',

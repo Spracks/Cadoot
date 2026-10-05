@@ -4,6 +4,7 @@ import {
   draftToQuiz,
   emptyDraft,
   emptyDraftQuestion,
+  removeOption,
   type Draft,
   type DraftQuestion,
 } from './quizDraft';
@@ -127,6 +128,30 @@ describe('draftToQuiz', () => {
     const { quiz, problems } = draftToQuiz(draft);
     expect(quiz).toBeNull();
     expect(problems.join(' ')).toMatch(/title/i);
+  });
+});
+
+describe('extra option slots', () => {
+  it('builds a question from more than four slots', () => {
+    const { quiz, problems } = draftToQuiz({
+      title: 'Many',
+      questions: [
+        dq({ text: 'Q', options: ['a', 'b', 'c', 'd', '', 'f', 'g', 'h'], correctIndex: 7 }),
+      ],
+    });
+    expect(problems).toEqual([]);
+    expect(choice(quiz!.questions[0]).options).toEqual(['a', 'b', 'c', 'd', 'f', 'g', 'h']);
+    expect(choice(quiz!.questions[0]).correctIndex).toBe(6);
+  });
+
+  it('keeps the correct mark on the same option when a slot is removed', () => {
+    const q = dq({ options: ['a', 'b', 'c', 'd', 'e', 'f'], correctIndex: 4 });
+    // Removing an earlier slot shifts the mark down with its option…
+    expect(removeOption(q, 1)).toMatchObject({ options: ['a', 'c', 'd', 'e', 'f'], correctIndex: 3 });
+    // …a later slot leaves it alone…
+    expect(removeOption(q, 5).correctIndex).toBe(4);
+    // …and removing the marked option itself falls back to the first.
+    expect(removeOption(q, 4).correctIndex).toBe(0);
   });
 });
 

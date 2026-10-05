@@ -4,6 +4,8 @@ export type QuestionType = 'multiple' | 'boolean' | 'fill' | 'open' | 'puzzle';
 /** The tile-based question types, answered by picking one option. */
 export type ChoiceType = 'multiple' | 'boolean';
 
+/** A multiple-choice question offers between 2 and this many options. */
+export const MAX_OPTIONS = 8;
 /** Longest typed answer (fill-in-the-blank / open-ended) a player may send. */
 export const MAX_TEXT_ANSWER = 120;
 /** Puzzle questions match between this many pairs, inclusive. */
@@ -35,7 +37,7 @@ const ChoiceQuestion = z.object({
   options: z
     .array(z.string().min(1, 'Option text cannot be empty'))
     .min(2, 'A question needs at least 2 options')
-    .max(4, 'A question can have at most 4 options'),
+    .max(MAX_OPTIONS, `A question can have at most ${MAX_OPTIONS} options`),
   correctIndex: z
     .number({ invalid_type_error: 'correctIndex must be a number' })
     .int('correctIndex must be a whole number')

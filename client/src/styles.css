@@ -816,6 +816,30 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- 5–8 option tiles ---------- */
+/* Shorter tiles, so up to four rows still fit under the question. */
+.answer-grid.many {
+  gap: 10px;
+}
+.answer-grid.many .tile {
+  min-height: 64px;
+  padding: 12px 14px;
+  font-size: 1rem;
+}
+.answer-grid.many.big .tile {
+  min-height: 84px;
+  font-size: 1.3rem;
+}
+/* Projectors are wide: three or four columns keep 8 options to two rows. */
+@media (min-width: 900px) {
+  .answer-grid.many.big {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .answer-grid.many.big:has(> .tile:nth-child(7)) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
 /* ---------- True / False tiles ---------- */
 .answer-grid.boolean .tile {
   justify-content: center;
@@ -1220,6 +1244,18 @@ button.puzzle-card {
 .answer-grid .tile:nth-child(4) {
   animation-delay: 0.18s;
 }
+.answer-grid .tile:nth-child(5) {
+  animation-delay: 0.24s;
+}
+.answer-grid .tile:nth-child(6) {
+  animation-delay: 0.3s;
+}
+.answer-grid .tile:nth-child(7) {
+  animation-delay: 0.36s;
+}
+.answer-grid .tile:nth-child(8) {
+  animation-delay: 0.42s;
+}
 .answer-grid .tile.correct {
   animation: fadeInUp 0.35s ease backwards, correctPulse 0.9s ease-out 0.35s 2;
 }
@@ -1443,6 +1479,17 @@ button.puzzle-card {
 @media (max-width: 520px) {
   .answer-grid {
     grid-template-columns: 1fr;
+  }
+  /* Eight full-width tiles would scroll off a phone; two columns fit. */
+  .answer-grid.many {
+    grid-template-columns: 1fr 1fr;
+  }
+  .answer-grid.many .tile {
+    min-height: 72px;
+    gap: 8px;
+    padding: 10px;
+    font-size: 0.95rem;
+    overflow-wrap: anywhere;
   }
   .puzzle-row {
     gap: 4px;

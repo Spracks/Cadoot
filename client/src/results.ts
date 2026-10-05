@@ -18,7 +18,7 @@ import type {
  * it opens offline months later from a phone's Downloads folder.
  */
 
-const LETTERS = ['A', 'B', 'C', 'D'];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 /* ------------------------------------------------------------------ *
  * Downloading

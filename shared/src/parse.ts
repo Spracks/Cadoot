@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { QuizSchema, type Quiz, type QuestionType } from './quiz';
+import { MAX_OPTIONS, QuizSchema, type Quiz, type QuestionType } from './quiz';
 import { z } from 'zod';
 
 export type ParseResult =
@@ -53,16 +53,16 @@ const TYPE_ALIASES: Record<string, QuestionType> = {
 };
 
 /** Spreadsheet columns that can hold options, answers or puzzle pairs. */
-const OPTION_COLUMNS = ['option1', 'option2', 'option3', 'option4', 'option5', 'option6'];
+const OPTION_COLUMNS = Array.from({ length: MAX_OPTIONS }, (_, i) => `option${i + 1}`);
 
 /**
  * Parse and validate a quiz from CSV text.
  *
  * Expected columns (header row required):
- *   question, type, option1 … option6, correct, timeLimitSec
+ *   question, type, option1 … option8, correct, timeLimitSec
  *
  * - `type` is optional; blank means multiple choice. See TYPE_ALIASES.
- * - `correct` is 1-based (the human-friendly option number, 1-4), or
+ * - `correct` is 1-based (the human-friendly option number, 1-8), or
  *   true/false for a true/false question. Other types ignore it.
  * - Fill-in-the-blank: every filled option cell is an accepted answer.
  * - Puzzle: each filled option cell is one `left | right` pair.
@@ -130,7 +130,7 @@ export function parseQuizCsv(
     const correctRaw = (row.correct ?? '').trim();
     const correct1Based = Number(correctRaw);
     if (!correctRaw || Number.isNaN(correct1Based)) {
-      errors.push(`Row ${rowNum}: "correct" must be an option number (1-${options.length || 4})`);
+      errors.push(`Row ${rowNum}: "correct" must be an option number (1-${options.length || MAX_OPTIONS})`);
     }
 
     return {

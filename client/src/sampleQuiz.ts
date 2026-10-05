@@ -45,6 +45,13 @@ export const SAMPLE_QUIZ: Quiz = {
       timeLimitSec: 20,
     },
     {
+      text: 'Which of these is NOT a programming language?',
+      type: 'multiple',
+      options: ['Rust', 'Kotlin', 'HTML', 'Haskell', 'Go', 'Swift'],
+      correctIndex: 2,
+      timeLimitSec: 25,
+    },
+    {
       text: 'In Python, a function is defined with the keyword ___.',
       type: 'fill',
       answers: ['def'],

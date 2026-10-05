@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  MAX_OPTIONS,
   MAX_PUZZLE_PAIRS,
   MIN_PUZZLE_PAIRS,
   isChoice,
@@ -9,11 +10,13 @@ import {
 import { answerStyle, tileStyle } from '../theme';
 import { downloadFile, slug } from '../results';
 import {
+  DEFAULT_OPTION_SLOTS,
   MAX_DRAFT_ANSWERS,
   draftToQuiz,
   emptyDraft,
   emptyDraftQuestion,
   emptyPair,
+  removeOption,
   type DraftQuestion,
 } from '../quizDraft';
 
@@ -199,9 +202,32 @@ export default function QuizBuilder({
                       placeholder={`Option ${oi + 1}${oi >= 2 ? ' (optional)' : ''}`}
                       onChange={(e) => setOption(i, oi, e.target.value)}
                     />
+                    {q.options.length > DEFAULT_OPTION_SLOTS && (
+                      <button
+                        type="button"
+                        className="link-btn danger builder-remove"
+                        aria-label={`Remove option ${oi + 1}`}
+                        onClick={() =>
+                          setQuestions((qs) =>
+                            qs.map((x, idx) => (idx === i ? removeOption(x, oi) : x)),
+                          )
+                        }
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 );
               }))}
+          {q.type === 'multiple' && q.options.length < MAX_OPTIONS && (
+            <button
+              type="button"
+              className="link-btn builder-add"
+              onClick={() => update(i, { options: [...q.options, ''] })}
+            >
+              + Add option
+            </button>
+          )}
 
           <label className="builder-time">
             Time limit (seconds)

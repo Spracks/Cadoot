@@ -122,6 +122,37 @@ describe('parseQuizCsv', () => {
   });
 });
 
+describe('questions with more than four options', () => {
+  const options = (n: number) => Array.from({ length: n }, (_, i) => `opt ${i + 1}`);
+  const quizWith = (n: number) =>
+    JSON.stringify({ title: 'T', questions: [{ text: 'Q', options: options(n), correctIndex: n - 1 }] });
+
+  it('accepts up to 8 options', () => {
+    const result = parseQuizJson(quizWith(8));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(choice(result.quiz.questions[0]).correctIndex).toBe(7);
+  });
+
+  it('rejects a ninth option', () => {
+    const result = parseQuizJson(quizWith(9));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(' ')).toMatch(/at most 8 options/);
+  });
+
+  it('reads option5 to option8 from CSV', () => {
+    const csv = [
+      'question,option1,option2,option3,option4,option5,option6,option7,option8,correct',
+      'Pick h,a,b,c,d,e,f,g,h,8',
+    ].join('\n');
+    const result = parseQuizCsv(csv);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const q = choice(result.quiz.questions[0]);
+    expect(q.options).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+    expect(q.correctIndex).toBe(7);
+  });
+});
+
 describe('new question types', () => {
   it('parses fill-in-the-blank, open-ended and puzzle questions from JSON', () => {
     const text = JSON.stringify({
