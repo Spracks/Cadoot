@@ -417,6 +417,52 @@ describe('game flow (end-to-end over sockets)', () => {
     }
   }, 15000);
 
+  it('breaks a streak when time runs out, except on open-ended questions', async () => {
+    const quiz: Quiz = {
+      title: 'Timeouts',
+      questions: [
+        { type: 'multiple', text: 'Q1', options: ['a', 'b'], correctIndex: 0, timeLimitSec: 30 },
+        { type: 'open', text: 'Q2', timeLimitSec: 30 },
+        { type: 'multiple', text: 'Q3', options: ['a', 'b'], correctIndex: 0, timeLimitSec: 30 },
+      ],
+    };
+    const { url, teardown } = await setup();
+    const host = connect(url);
+    const alice = connect(url);
+    try {
+      const created = await host.emitWithAck('host:createGame', { quiz });
+      const pin = created.pin as string;
+      await alice.emitWithAck('player:join', { pin, nickname: 'Alice' });
+
+      const shown1 = once(alice, 'question:show');
+      host.emit('host:startGame');
+      await shown1;
+      const r1P = once<any>(alice, 'answer:result');
+      alice.emit('player:answer', { optionIndex: 0 });
+      expect((await r1P).streak).toBe(1);
+
+      // Skipping an open-ended question she never answered leaves it intact...
+      const shown2 = once(alice, 'question:show');
+      host.emit('host:nextQuestion');
+      await shown2;
+      const r2P = once<any>(alice, 'answer:result');
+      host.emit('host:skipQuestion');
+      expect((await r2P).streak).toBe(1);
+
+      // ...but letting a graded question run out breaks it.
+      const shown3 = once(alice, 'question:show');
+      host.emit('host:nextQuestion');
+      await shown3;
+      const r3P = once<any>(alice, 'answer:result');
+      host.emit('host:skipQuestion');
+      expect(await r3P).toMatchObject({ streak: 0, streakBonus: 0, correct: false });
+    } finally {
+      host.close();
+      alice.close();
+      teardown();
+    }
+  }, 15000);
+
   it('plays fill-in-the-blank, open-ended and puzzle questions', async () => {
     const PAIRS = [
       { left: 'HTTP', right: '80' },

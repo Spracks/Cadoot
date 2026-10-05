@@ -412,6 +412,12 @@ export function registerHandlers(io: IoServer): GameManager {
     if (!question) return;
 
     for (const p of game.players.values()) {
+      // Running out of time on a graded question breaks a streak just like a
+      // wrong answer does. (Answering already settled it for everyone else.)
+      if (!p.answered && isGraded(question)) {
+        p.streak = 0;
+        p.lastStreakBonus = 0;
+      }
       p.score += p.lastPoints;
       // Commit this question to the permanent record before the next one
       // overwrites the `last*` fields. Non-answerers are recorded too.

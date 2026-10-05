@@ -68,8 +68,8 @@ In dev, open the client at `http://localhost:5173`.
   and always earn the full amount; after that the value drops steadily, reaching
   **500** at the buzzer.
 - **Streaks:** each correct answer in a row after the first adds a **+100** bonus
-  (+100, +200, … capped at +500). A wrong answer resets the
-  streak.
+  (+100, +200, … capped at +500). A wrong answer — or letting the timer run out —
+  resets the streak.
 - **Puzzles** give partial credit: matching 3 of 4 pairs earns 3/4 of the points.
   Only a perfect match counts as correct and keeps a streak going.
 - **Open-ended** questions aren't scored, and answering (or skipping) one never
